@@ -107,6 +107,17 @@ def scrape_all_routes(origins, destinations, departure_date, num_workers=5):
     return valid
 
 
+def scrape_routes_sequential(route_tuples):
+    """
+    Scrape routes one-by-one in the current process (no Pool).
+    Use for low-memory environments (512 MB). Yields results so caller can insert in batches.
+    """
+    for args in route_tuples:
+        r = scrape_route(args)
+        if r is not None:
+            yield r
+
+
 def scrape_baseline(origins, destinations, num_workers=5):
     """
     INITIAL BASELINE: Scrape all routes for next 31 days (today through +30).
