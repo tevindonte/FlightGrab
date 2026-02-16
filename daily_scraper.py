@@ -7,20 +7,21 @@ import sys
 from dotenv import load_dotenv
 load_dotenv()
 
-from datetime import datetime
-from flight_scraper import scrape_baseline, scrape_incremental, TOP_50_US_AIRPORTS
+from datetime import datetime, timedelta
+from flight_scraper import scrape_all_routes, scrape_incremental, TOP_50_US_AIRPORTS
 from db_manager import FlightDatabase
 
 # Phase: 5 = test (~1 hr baseline), 10 = medium (~2 hr), 50 = full (~9 hr)
-NUM_ORIGINS = 50
+NUM_ORIGINS = 5
 NUM_WORKERS = 5
+# Baseline: 1 worker fits 512 MB (Starter). More workers = OOM on free tier.
+BASELINE_WORKERS = 1
 
 
 def run_baseline_scrape():
     """
     INITIAL BASELINE – run ONCE to populate the 30-day window.
-    WARNING: 5 origins × 50 dests × 31 dates ≈ 7,750 routes (~1 hour).
-    Set NUM_ORIGINS = 50 for full run (~9 hours).
+    Scrapes one day at a time and inserts immediately (keeps memory under 512 MB).
     """
     print("=" * 60)
     print(f"BASELINE SCRAPE - {datetime.now()}")
@@ -31,16 +32,21 @@ def run_baseline_scrape():
     db.create_tables()
 
     origins = TOP_50_US_AIRPORTS[:NUM_ORIGINS]
-    results = scrape_baseline(
-        origins=origins,
-        destinations=TOP_50_US_AIRPORTS,
-        num_workers=NUM_WORKERS
-    )
+    total = 0
+    for days_ahead in range(0, 31):
+        departure_date = (datetime.now() + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+        print(f"\nScraping day {days_ahead + 1}/31: {departure_date}")
+        flights = scrape_all_routes(
+            origins, TOP_50_US_AIRPORTS, departure_date, num_workers=BASELINE_WORKERS
+        )
+        if flights:
+            db.insert_flights(flights)
+            total += len(flights)
+        # Don't keep flights in memory; next iteration reuses nothing
 
-    if results:
-        db.insert_flights(results)
+    if total:
         db.create_daily_snapshot()
-        print(f"\n✓ Baseline completed: {len(results)} flights")
+        print(f"\n✓ Baseline completed: {total} flights")
     else:
         print("\n✗ No results collected")
         sys.exit(1)
