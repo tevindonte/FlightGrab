@@ -1,0 +1,37 @@
+# FlightGrab – Render Blueprint
+# Web app + cron for daily incremental scrape. Run baseline once via "Trigger run" on flightgrab-baseline.
+
+services:
+  # Web server (FlightGrab UI + API)
+  - type: web
+    name: flightgrab
+    runtime: python
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false  # Set in Dashboard: Neon PostgreSQL connection string
+
+  # Baseline scrape – run ONCE via Dashboard "Trigger run" (schedule is yearly so it won't run by itself)
+  - type: cron
+    name: flightgrab-baseline
+    runtime: python
+    schedule: "0 0 1 1 *"  # Jan 1 midnight UTC only (use "Trigger run" for real baseline)
+    buildCommand: pip install -r requirements.txt
+    startCommand: python daily_scraper.py baseline
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+
+  # Daily incremental scrape (e.g. 3 AM UTC daily)
+  - type: cron
+    name: flightgrab-incremental
+    runtime: python
+    schedule: "0 3 * * *"  # 3:00 AM UTC every day
+    buildCommand: pip install -r requirements.txt
+    startCommand: python daily_scraper.py incremental
+    envVars:
+      - key: DATABASE_URL
+        sync: false

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlightGrab – Cheapest Flight Deals</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/" class="logo">FlightGrab</a>
+      <p class="tagline">Cheapest flights from major US airports</p>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="hero">
+      <h1>Find the best flight deals</h1>
+      <p class="hero-sub">Search by route or browse cheapest destinations from your airport.</p>
+
+      <div class="search-card">
+        <div class="search-row">
+          <div class="field">
+            <label for="from">From</label>
+            <select id="from" aria-label="Origin airport"></select>
+          </div>
+          <div class="field">
+            <label for="to">To</label>
+            <select id="to" aria-label="Destination airport"></select>
+          </div>
+          <div class="field field-period">
+            <label for="period">When</label>
+            <select id="period" aria-label="Time period">
+              <option value="today">Today</option>
+              <option value="weekend">Weekend (3 days)</option>
+              <option value="week">This week</option>
+              <option value="month">This month</option>
+            </select>
+          </div>
+          <button type="button" id="search-btn" class="btn btn-primary">Search</button>
+        </div>
+        <p class="search-hint">Pick origin and destination, or use "Browse deals" below to see cheapest from one airport.</p>
+      </div>
+    </section>
+
+    <section class="browse-deals">
+      <h2>Browse deals by airport</h2>
+      <div class="origin-picker">
+        <label for="deals-origin">Show cheapest flights from</label>
+        <select id="deals-origin" aria-label="Origin for deal list"></select>
+      </div>
+      <div class="tabs">
+        <button type="button" class="tab active" data-period="today">Today</button>
+        <button type="button" class="tab" data-period="weekend">Weekend</button>
+        <button type="button" class="tab" data-period="week">This week</button>
+        <button type="button" class="tab" data-period="month">This month</button>
+      </div>
+      <div id="deals-loading" class="loading" hidden>Loading deals…</div>
+      <div id="deals-error" class="error" hidden></div>
+      <div id="deals-list" class="deals-grid"></div>
+    </section>
+
+    <section id="search-result" class="search-result" hidden>
+      <h2>Route result</h2>
+      <div id="search-result-content"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>FlightGrab aggregates prices from Google Flights. Book via the links to complete your purchase.</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

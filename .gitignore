@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.py[cod]
+*.db
+booking_links.txt
+flight_links_test.db
+.venv/
+venv/
+.env.local
