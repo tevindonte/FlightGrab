@@ -20,6 +20,16 @@ class FlightDatabase:
         self.conn = psycopg2.connect(self.conn_string)
         return self.conn
 
+    def reconnect(self):
+        """Close existing connection (if any) and open a new one. Use after long idle periods (e.g. after a multi‑minute scrape) to avoid SSL connection closed errors."""
+        if self.conn:
+            try:
+                self.conn.close()
+            except Exception:
+                pass
+            self.conn = None
+        return self.connect()
+
     def create_tables(self):
         """Create tables if they don't exist (rolling 30-day schema)."""
         cursor = self.conn.cursor()
@@ -177,14 +187,22 @@ class FlightDatabase:
 
         cursor.execute(f"""
             SELECT DISTINCT ON (destination)
-                destination, price as min_price, airline, departure_date,
-                departure_time, google_flights_url
+                destination, price, airline, departure_date,
+                departure_time, google_flights_url, duration, num_stops
             FROM current_prices
             WHERE origin = %s AND {cond}
             ORDER BY destination, price ASC
         """, (origin,))
         rows = cursor.fetchall()
         cursor.close()
+
+        def _num_stops(n):
+            if n is None:
+                return 0
+            try:
+                return int(n)
+            except (TypeError, ValueError):
+                return 0
 
         return sorted(
             [
@@ -194,7 +212,9 @@ class FlightDatabase:
                     'airline': r[2],
                     'departure_date': r[3].isoformat() if r[3] else None,
                     'departure_time': r[4],
-                    'booking_url': r[5]
+                    'booking_url': r[5],
+                    'duration': r[6] if len(r) > 6 else None,
+                    'num_stops': _num_stops(r[7]) if len(r) > 7 else 0,
                 }
                 for r in rows
             ],

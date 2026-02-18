@@ -1,9 +1,12 @@
 """
 Daily scraping job – rolling 30-day window.
-Optimized for 512 MB (Render free tier): no multiprocessing in baseline, small batches, 7-day start.
+
+- Render (512 MB): run incremental only. Baseline = 7 days, low-memory (or delete baseline cron).
+- Local (full baseline): set FULL_BASELINE=1 and run baseline → 31 days, multi-worker, ~1–3 hr.
 """
 
 import gc
+import os
 import sys
 from dotenv import load_dotenv
 load_dotenv()
@@ -19,11 +22,16 @@ from db_manager import FlightDatabase
 
 # Origins: 5 = test, 50 = full
 NUM_ORIGINS = 5
-# Incremental: use 1 worker on 512 MB to avoid OOM
+# Incremental: 1 worker for 512 MB (Render). Use more if you have RAM.
 NUM_WORKERS = 1
-# Baseline: 7 days only (fits 512 MB). Incremental will extend the window over time.
+
+# Full baseline (local): set FULL_BASELINE=1 → 31 days, multi-worker
+FULL_BASELINE = os.environ.get("FULL_BASELINE", "").lower() in ("1", "true", "yes")
+FULL_BASELINE_WORKERS = 5
+FULL_BASELINE_DAYS = 31
+
+# Low-memory baseline (Render / no FULL_BASELINE): 7 days, sequential
 BASELINE_DAYS = 7
-# Insert every N routes; lower = less memory (try 5 or 1 if still OOM on 512 MB)
 BASELINE_BATCH_SIZE = 10
 
 
@@ -39,11 +47,52 @@ def _route_tuples_for_day(origins, destinations, departure_date):
 
 def run_baseline_scrape():
     """
-    BASELINE – no Pool, sequential scrape in small batches. Fits 512 MB.
-    Scrapes 7 days only; incremental daily runs extend the window.
+    BASELINE:
+    - FULL_BASELINE=1 (local): 31 days, multi-worker, insert per day. ~1–3 hr for 5 origins.
+    - Otherwise (Render): 7 days, sequential, small batches. Fits 512 MB.
     """
+    if FULL_BASELINE:
+        _run_baseline_full()
+    else:
+        _run_baseline_low_memory()
+
+
+def _run_baseline_full():
+    """Full 31-day baseline with multiple workers. Run locally with FULL_BASELINE=1."""
     print("=" * 60)
-    print(f"BASELINE SCRAPE (low-memory) - {datetime.now()}")
+    print(f"BASELINE (FULL) - 31 days, {FULL_BASELINE_WORKERS} workers - {datetime.now()}")
+    print("=" * 60)
+
+    db = FlightDatabase()
+    db.connect()
+    db.create_tables()
+
+    origins = TOP_50_US_AIRPORTS[:NUM_ORIGINS]
+    total = 0
+    for days_ahead in range(0, FULL_BASELINE_DAYS):
+        departure_date = (datetime.now() + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+        print(f"\nDay {days_ahead + 1}/{FULL_BASELINE_DAYS}: {departure_date}")
+        flights = scrape_all_routes(
+            origins, TOP_50_US_AIRPORTS, departure_date, num_workers=FULL_BASELINE_WORKERS
+        )
+        if flights:
+            db.insert_flights(flights)
+            total += len(flights)
+        gc.collect()
+
+    if total:
+        db.create_daily_snapshot()
+        print(f"\n✓ Full baseline completed: {total} flights ({FULL_BASELINE_DAYS} days)")
+    else:
+        print("\n✗ No results collected")
+        sys.exit(1)
+    db.close()
+
+
+def _run_baseline_low_memory():
+    """7-day baseline, sequential, small batches. For Render 512 MB."""
+    print("=" * 60)
+    print(f"BASELINE (low-memory, 7 days) - {datetime.now()}")
     print("=" * 60)
 
     db = FlightDatabase()
@@ -58,7 +107,7 @@ def run_baseline_scrape():
         print(f"\nDay {days_ahead + 1}/{BASELINE_DAYS}: {departure_date} ({len(routes)} routes)")
 
         batch = []
-        for i, flight in enumerate(scrape_routes_sequential(routes)):
+        for flight in scrape_routes_sequential(routes):
             batch.append(flight)
             if len(batch) >= BASELINE_BATCH_SIZE:
                 db.insert_flights(batch)
@@ -101,6 +150,7 @@ def run_incremental_scrape():
     )
 
     if results:
+        db.reconnect()  # fresh connection after long scrape (avoids SSL connection closed)
         db.insert_flights(results)
         db.create_daily_snapshot()
         db.cleanup_old_data()
@@ -122,6 +172,9 @@ if __name__ == "__main__":
         run_incremental_scrape()
     else:
         print("Usage: python daily_scraper.py [baseline|incremental]")
-        print("  baseline    - First time: 7 days, low-memory (~45 min for 5 origins)")
-        print("  incremental - Daily: refresh today + new +30 day (~3.5 min for 5 origins)")
+        print("  baseline    - First time. Set FULL_BASELINE=1 for full 31 days (run locally).")
+        print("  incremental - Daily: refresh today + new +30 day")
+        print("")
+        print("Local full baseline:  FULL_BASELINE=1 python daily_scraper.py baseline")
+        print("Render / low-memory:  python daily_scraper.py baseline  (7 days)")
         sys.exit(1)

@@ -1,144 +1,261 @@
 (function () {
   const API = '';
-  const fromSelect = document.getElementById('from');
-  const toSelect = document.getElementById('to');
-  const periodSelect = document.getElementById('period');
-  const searchBtn = document.getElementById('search-btn');
-  const dealsOrigin = document.getElementById('deals-origin');
-  const tabs = document.querySelectorAll('.tab');
-  const dealsLoading = document.getElementById('deals-loading');
-  const dealsError = document.getElementById('deals-error');
-  const dealsList = document.getElementById('deals-list');
-  const searchResult = document.getElementById('search-result');
-  const searchResultContent = document.getElementById('search-result-content');
+
+  function runApp() {
+    const originSelect = document.getElementById('origin');
+    const searchInput = document.getElementById('search-input');
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    const noResultsEl = document.getElementById('no-results');
+    const dealsGrid = document.getElementById('deals-grid');
+
+    if (!originSelect || !dealsGrid) {
+      console.error('FlightGrab: missing required DOM elements (origin or deals-grid)');
+      return;
+    }
+
+  // Airport code -> state (images in /static/images/states/, run scripts/download_state_images.py)
+  const AIRPORT_TO_STATE = {
+    'ATL': 'georgia', 'DFW': 'texas', 'DEN': 'colorado', 'ORD': 'illinois',
+    'LAX': 'california', 'CLT': 'north_carolina', 'MCO': 'florida',
+    'LAS': 'nevada', 'PHX': 'arizona', 'MIA': 'florida', 'SEA': 'washington',
+    'IAH': 'texas', 'EWR': 'new_jersey', 'SFO': 'california', 'BOS': 'massachusetts',
+    'MSP': 'minnesota', 'DTW': 'michigan', 'FLL': 'florida', 'JFK': 'new_york',
+    'LGA': 'new_york', 'PHL': 'pennsylvania', 'BWI': 'maryland', 'DCA': 'virginia',
+    'IAD': 'virginia', 'SAN': 'california', 'SLC': 'utah', 'TPA': 'florida',
+    'PDX': 'oregon', 'HNL': 'hawaii', 'AUS': 'texas', 'MDW': 'illinois',
+    'BNA': 'tennessee', 'DAL': 'texas', 'RDU': 'north_carolina', 'STL': 'missouri',
+    'HOU': 'texas', 'SJC': 'california', 'MCI': 'kansas', 'OAK': 'california',
+    'SAT': 'texas', 'RSW': 'florida', 'IND': 'indiana', 'CMH': 'ohio',
+    'CVG': 'kentucky', 'PIT': 'pennsylvania', 'SMF': 'california', 'CLE': 'ohio',
+    'MKE': 'wisconsin', 'SNA': 'california', 'ANC': 'alaska',
+  };
+
+  function getCityImage(airportCode) {
+    const state = AIRPORT_TO_STATE[airportCode] || 'georgia';
+    return `/static/images/states/${state}.jpg`;
+  }
+
+  const AIRPORT_CITIES = {
+    'ATL': 'Atlanta',
+    'DFW': 'Dallas',
+    'DEN': 'Denver',
+    'ORD': 'Chicago',
+    'LAX': 'Los Angeles',
+    'CLT': 'Charlotte',
+    'MCO': 'Orlando',
+    'LAS': 'Las Vegas',
+    'PHX': 'Phoenix',
+    'MIA': 'Miami',
+    'SEA': 'Seattle',
+    'IAH': 'Houston',
+    'EWR': 'Newark',
+    'SFO': 'San Francisco',
+    'BOS': 'Boston',
+    'MSP': 'Minneapolis',
+    'DTW': 'Detroit',
+    'FLL': 'Fort Lauderdale',
+    'JFK': 'New York',
+    'LGA': 'New York',
+    'PHL': 'Philadelphia',
+    'BWI': 'Baltimore',
+    'DCA': 'Washington',
+    'IAD': 'Washington',
+    'SAN': 'San Diego',
+    'SLC': 'Salt Lake City',
+    'TPA': 'Tampa',
+    'PDX': 'Portland',
+    'HNL': 'Honolulu',
+    'AUS': 'Austin',
+    'MDW': 'Chicago',
+    'BNA': 'Nashville',
+    'DAL': 'Dallas',
+    'RDU': 'Raleigh',
+    'STL': 'St. Louis',
+    'HOU': 'Houston',
+    'SJC': 'San Jose',
+    'MCI': 'Kansas City',
+    'OAK': 'Oakland',
+    'SAT': 'San Antonio',
+    'RSW': 'Fort Myers',
+    'IND': 'Indianapolis',
+    'CMH': 'Columbus',
+    'CVG': 'Cincinnati',
+    'PIT': 'Pittsburgh',
+    'SMF': 'Sacramento',
+    'CLE': 'Cleveland',
+    'MKE': 'Milwaukee',
+    'SNA': 'Santa Ana',
+    'ANC': 'Anchorage',
+  };
 
   let airports = [];
+  let allDeals = [];
+  let currentOrigin = '';
 
-  function fillAirports(select, exclude) {
-    select.innerHTML = '<option value="">Select…</option>';
-    airports.forEach(code => {
-      if (code === exclude) return;
-      const opt = document.createElement('option');
-      opt.value = code;
-      opt.textContent = code;
-      select.appendChild(opt);
-    });
+  function setLoading(show) {
+    if (loadingEl) loadingEl.classList.toggle('hidden', !show);
+    if (show) {
+      if (errorEl) errorEl.classList.add('hidden');
+      if (noResultsEl) noResultsEl.classList.add('hidden');
+    }
   }
+
+  function setError(msg) {
+    if (errorEl) {
+      errorEl.classList.toggle('hidden', !msg);
+      errorEl.textContent = msg || '';
+    }
+    if (msg && dealsGrid) dealsGrid.innerHTML = '';
+  }
+
+  function formatDate(isoDate) {
+    if (!isoDate) return '—';
+    const d = new Date(isoDate + 'T12:00:00');
+    const options = { weekday: 'short', month: 'numeric', day: 'numeric' };
+    return d.toLocaleDateString('en-US', options);
+  }
+
+  function formatStops(numStops) {
+    if (numStops === 0) return 'non-stop';
+    return numStops === 1 ? '1 stop' : numStops + ' stops';
+  }
+
+  function getCityName(code) {
+    return AIRPORT_CITIES[code] || code;
+  }
+
+  function escapeAttr(str) {
+    if (str == null) return '';
+    return String(str).replace(/\r?\n/g, ' ').replace(/"/g, '&quot;').trim();
+  }
+
+  function cardMatchesSearch(deal, query) {
+    if (!query || !query.trim()) return true;
+    const q = query.trim().toLowerCase();
+    const city = getCityName(deal.destination).toLowerCase();
+    const code = deal.destination.toLowerCase();
+    return city.includes(q) || code.includes(q);
+  }
+
+  function renderCards(deals, searchQuery) {
+    const filtered = searchQuery
+      ? deals.filter(d => cardMatchesSearch(d, searchQuery))
+      : deals;
+
+    if (noResultsEl) noResultsEl.classList.toggle('hidden', filtered.length > 0 || deals.length === 0);
+    if (filtered.length === 0 && deals.length > 0) {
+      if (dealsGrid) dealsGrid.innerHTML = '';
+      return;
+    }
+    if (filtered.length === 0) {
+      if (dealsGrid) dealsGrid.innerHTML = '';
+      return;
+    }
+
+    if (!dealsGrid) return;
+    try {
+      const html = filtered.map(deal => {
+        const cityName = getCityName(deal.destination);
+        const code = deal.destination || '';
+        const roundTripPrice = (Number(deal.price) || 0) * 2;
+        const duration = deal.duration || '—';
+        const stops = formatStops(deal.num_stops != null ? deal.num_stops : 0);
+        const dateStr = formatDate(deal.departure_date);
+        const imgSrc = getCityImage(code);
+        const bookingUrl = escapeAttr(deal.booking_url) || '#';
+        const fallbackSvg = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27400%27%20height%3D%27300%27%3E%3Crect%20fill%3D%27%231a73e8%27%20width%3D%27400%27%20height%3D%27300%27%2F%3E%3C%2Fsvg%3E";
+        return `
+        <a class="deal-card" href="${bookingUrl}" target="_blank" rel="noopener" data-destination="${code}">
+          <img class="card-image" src="${imgSrc}" alt="${cityName}" loading="lazy" onerror="this.src='${fallbackSvg}'">
+          <div class="card-content">
+            <h3 class="city-name">${cityName}</h3>
+            <p class="airport-code">${deal.destination}</p>
+            <p class="flight-info">${duration}, ${stops}</p>
+            <p class="flight-dates">Departs ${dateStr}</p>
+            <p class="price">from $${Math.round(roundTripPrice)}</p>
+            <p class="price-note">round-trip</p>
+          </div>
+        </a>
+      `;
+      }).join('');
+      dealsGrid.innerHTML = html;
+    } catch (err) {
+      console.error('FlightGrab renderCards error:', err);
+      dealsGrid.innerHTML = '<p class="error">Error displaying deals. Check console.</p>';
+    }
+  }
+
+  async function fetchDeals(origin) {
+    if (!origin) {
+      dealsGrid.innerHTML = '';
+      return;
+    }
+    currentOrigin = origin;
+    setLoading(true);
+    setError(null);
+    try {
+      // Use 'week' so we show data when DB has future dates only; use 'today' after running incremental for current day
+      const res = await fetch(`${API}/api/deals?origin=${encodeURIComponent(origin)}&period=week`);
+      if (!res.ok) throw new Error(res.statusText);
+      const data = await res.json();
+      allDeals = data.deals || [];
+      renderCards(allDeals, searchInput ? searchInput.value.trim() : '');
+    } catch (e) {
+      setError(e.message || 'Failed to load deals');
+      allDeals = [];
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const FALLBACK_ORIGINS = ['ATL', 'DFW', 'DEN', 'LAX', 'ORD'];
 
   async function loadAirports() {
     try {
-      const res = await fetch(`${API}/api/airports`);
+      const res = await fetch(`${API}/api/airports?with_data=true`);
       const data = await res.json();
-      airports = data.airports || [];
-      fillAirports(fromSelect);
-      fillAirports(toSelect);
-      fillAirports(dealsOrigin);
-    } catch (e) {
-      console.error('Failed to load airports', e);
-      dealsError.hidden = false;
-      dealsError.textContent = 'Could not load airports. Is the server running?';
-    }
-  }
-
-  function showDealsLoading(show) {
-    dealsLoading.hidden = !show;
-    if (show) dealsError.hidden = true;
-  }
-
-  function showDealsError(msg) {
-    dealsError.hidden = false;
-    dealsError.textContent = msg;
-    dealsList.innerHTML = '';
-  }
-
-  function renderDeals(origin, period, deals) {
-    dealsError.hidden = true;
-    if (!deals || deals.length === 0) {
-      dealsList.innerHTML = '<p class="loading">No deals found for this period. Run the scraper to populate data.</p>';
-      return;
-    }
-    dealsList.innerHTML = deals.map(d => `
-      <article class="deal-card">
-        <div class="route">${origin} → ${d.destination}</div>
-        <div class="price">$${Number(d.price).toFixed(2)}</div>
-        <div class="meta">${d.departure_date ? d.departure_date + ' · ' : ''}${d.airline || '—'}${d.departure_time ? ' · ' + d.departure_time : ''}</div>
-        <a class="book-link" href="${d.booking_url || '#'}" target="_blank" rel="noopener">View on Google Flights →</a>
-      </article>
-    `).join('');
-  }
-
-  async function fetchDeals(origin, period) {
-    showDealsLoading(true);
-    try {
-      const res = await fetch(`${API}/api/deals?origin=${encodeURIComponent(origin)}&period=${encodeURIComponent(period)}`);
-      if (!res.ok) throw new Error(res.statusText);
-      const data = await res.json();
-      renderDeals(data.origin, data.period, data.deals);
-    } catch (e) {
-      showDealsError(e.message || 'Failed to load deals');
-    } finally {
-      showDealsLoading(false);
-    }
-  }
-
-  function getActivePeriod() {
-    const t = document.querySelector('.tab.active');
-    return t ? t.dataset.period : 'today';
-  }
-
-  dealsOrigin.addEventListener('change', function () {
-    const origin = this.value;
-    if (!origin) {
-      dealsList.innerHTML = '';
-      return;
-    }
-    fetchDeals(origin, getActivePeriod());
-  });
-
-  tabs.forEach(tab => {
-    tab.addEventListener('click', function () {
-      tabs.forEach(t => t.classList.remove('active'));
-      this.classList.add('active');
-      const origin = dealsOrigin.value;
-      if (origin) fetchDeals(origin, this.dataset.period);
-    });
-  });
-
-  searchBtn.addEventListener('click', async function () {
-    const origin = fromSelect.value;
-    const destination = toSelect.value;
-    const period = periodSelect.value;
-    if (!origin || !destination) {
-      alert('Please select both From and To airports.');
-      return;
-    }
-    searchResult.hidden = true;
-    searchResultContent.innerHTML = '';
-    try {
-      const res = await fetch(
-        `${API}/api/search?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&period=${encodeURIComponent(period)}`
-      );
-      if (res.status === 404) {
-        searchResultContent.innerHTML = '<p class="error">No data for this route. Try another period or run the scraper.</p>';
-        searchResult.hidden = false;
-        return;
+      airports = Array.isArray(data.airports) && data.airports.length > 0
+        ? data.airports
+        : FALLBACK_ORIGINS;
+      originSelect.innerHTML = '<option value="">Select airport…</option>' +
+        airports.map(code => `<option value="${code}">${code}</option>`).join('');
+      const first = airports[0];
+      if (first) {
+        originSelect.value = first;
+        fetchDeals(first);
+      } else {
+        setError('No airport data. Run the scraper first.');
       }
-      if (!res.ok) throw new Error(res.statusText);
-      const r = await res.json();
-      searchResultContent.innerHTML = `
-        <div class="result-card">
-          <div class="result-route">${r.origin} → ${r.destination}</div>
-          <div class="result-price">$${Number(r.price).toFixed(2)}</div>
-          <div class="result-meta">${r.departure_date ? r.departure_date + ' · ' : ''}${r.airline || '—'}${r.departure_time ? ' · ' + r.departure_time : ''}${r.duration ? ' · ' + r.duration : ''}</div>
-          <a class="book-link" href="${r.booking_url || '#'}" target="_blank" rel="noopener">View on Google Flights →</a>
-        </div>
-      `;
-      searchResult.hidden = false;
     } catch (e) {
-      searchResultContent.innerHTML = '<p class="error">Search failed. ' + (e.message || '') + '</p>';
-      searchResult.hidden = false;
+      airports = FALLBACK_ORIGINS;
+      originSelect.innerHTML = '<option value="">Select airport…</option>' +
+        airports.map(code => `<option value="${code}">${code}</option>`).join('');
+      originSelect.value = FALLBACK_ORIGINS[0];
+      fetchDeals(FALLBACK_ORIGINS[0]);
     }
+  }
+
+  originSelect.addEventListener('change', function () {
+    fetchDeals(this.value);
   });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      const q = this.value.trim();
+      renderCards(allDeals, q);
+    });
+    searchInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') e.preventDefault();
+    });
+  }
 
   loadAirports();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', runApp);
+  } else {
+    runApp();
+  }
 })();

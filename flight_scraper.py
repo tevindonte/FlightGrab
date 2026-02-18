@@ -30,6 +30,19 @@ def _parse_stops(value):
         return 0
 
 
+def _parse_price(price_str):
+    """Parse price string to float; return None if unavailable or invalid."""
+    if not price_str or not isinstance(price_str, str):
+        return None
+    s = price_str.strip().replace('$', '').replace(',', '').replace(' ', '')
+    if not s or s.lower() in ('unavailable', 'n/a', 'na', 'price unavailable'):
+        return None
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        return None
+
+
 def generate_google_flights_url(origin, destination, date):
     base = "https://www.google.com/travel/flights"
     query = f"Flights from {origin} to {destination} on {date}"
@@ -62,8 +75,12 @@ def scrape_route(args):
         )
 
         if result and result.flights:
-            cheapest = min(result.flights, key=lambda x: float(x.price.replace('$', '').replace(',', '')))
-            price = float(cheapest.price.replace('$', '').replace(',', ''))
+            # Only consider flights with a valid numeric price (skip "Price unavailable" etc.)
+            valid_flights = [(f, _parse_price(getattr(f, 'price', None))) for f in result.flights]
+            valid_flights = [(f, p) for f, p in valid_flights if p is not None]
+            if not valid_flights:
+                return None
+            cheapest, price = min(valid_flights, key=lambda x: x[1])
 
             return {
                 'origin': origin,
@@ -85,7 +102,11 @@ def scrape_route(args):
         return None
 
     except Exception as e:
-        print(f"Error scraping {origin}-{destination}: {e}")
+        msg = str(e).strip()
+        # Keep logs short: avoid dumping full HTML when "No flights found"
+        if len(msg) > 200:
+            msg = msg[:200] + "..."
+        print(f"Error scraping {origin}-{destination}: {msg}")
         return None
 
 

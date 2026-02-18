@@ -82,7 +82,7 @@ async def list_airports():
 @app.get("/api/deals")
 async def get_deals(
     origin: str = Query(..., min_length=3, max_length=3),
-    period: str = Query("today", regex="^(today|weekend|week|month)$"),
+    period: str = Query("today", pattern="^(today|weekend|week|month)$"),
 ):
     """Get cheapest flights from an origin (by departure date: today, weekend, week, month)."""
     origin = origin.upper()
@@ -100,7 +100,7 @@ async def get_deals(
 async def search_route(
     origin: str = Query(..., min_length=3, max_length=3),
     destination: str = Query(..., min_length=3, max_length=3),
-    period: str = Query("today", regex="^(today|weekend|week|month)$"),
+    period: str = Query("today", pattern="^(today|weekend|week|month)$"),
 ):
     """Get best price for a specific route (by departure window)."""
     origin, destination = origin.upper(), destination.upper()

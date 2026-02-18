@@ -51,15 +51,35 @@ instead (or set the group in the Dashboard for each service).
 - Click **Apply** (or let Render create the services). The **flightgrab** web service will build and deploy; your site will be at `https://flightgrab.onrender.com` (or the name you gave it).
 - The two cron jobs will build; they won’t run until their schedule (or manual trigger).
 
-## 5. Run baseline once
+## 5. Run baseline once (recommended: locally)
 
-The **flightgrab-baseline** cron is scheduled for Jan 1 only so it doesn’t run by itself.
+Render’s free tier has **512 MB RAM**. The baseline scraper (browser + parsing) often exceeds that, so **run baseline on your machine**, then use Render only for the web app and the **incremental** cron.
 
-1. Open the **flightgrab-baseline** cron job in the Render Dashboard.
-2. Click **Trigger Run** to run `python daily_scraper.py baseline` once.
-3. With default `NUM_ORIGINS = 5`, this takes about **1 hour**. For full 50 origins (~9 hours), change `NUM_ORIGINS` in `daily_scraper.py` and push before triggering.
+### Option A: Run baseline locally (recommended)
 
-After baseline finishes, the DB will have a 30-day window of prices. The **flightgrab-incremental** cron will then keep it updated every day.
+On your laptop (or any machine with enough RAM):
+
+```bash
+cd /path/to/FlightGrab
+pip install -r requirements.txt
+export DATABASE_URL="postgresql://user:password@host/dbname?sslmode=require"   # or use .env
+FULL_BASELINE=1 python daily_scraper.py baseline
+```
+
+- **FULL_BASELINE=1** = full **31 days**, **5 workers**. For 5 origins: ~1–1.5 hours. For 50 origins: change `NUM_ORIGINS = 50` in `daily_scraper.py`, then ~8–9 hours.
+- After it finishes, the DB has the full 30-day window. No need to run baseline on Render.
+
+Then on Render:
+
+- **Delete** the **flightgrab-baseline** cron job (or leave it and never trigger it).
+- Keep only **flightgrab-incremental** (runs daily at 3 AM UTC).
+
+### Option B: Run baseline on Render (may OOM on free tier)
+
+If you still have a baseline cron on Render:
+
+1. Open **flightgrab-baseline** → **Trigger Run**.
+2. Without `FULL_BASELINE`, it runs the **low-memory** path (7 days, sequential, ~45 min for 5 origins). It may still hit 512 MB; if it does, use Option A.
 
 ## 6. Daily incremental (automatic)
 
