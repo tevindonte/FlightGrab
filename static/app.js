@@ -150,18 +150,10 @@
     return city.includes(q) || code.includes(q);
   }
 
-  function buildBookingUrl(origin, destination, departureDate) {
-    if (!origin || !destination || !departureDate) return '#';
-    const q = `Flights from ${origin} to ${destination} on ${departureDate}`;
-    return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}`;
-  }
-
   function renderCards(deals, searchQuery, origin) {
     let filtered = searchQuery
       ? deals.filter(d => cardMatchesSearch(d, searchQuery))
       : deals;
-
-    const originCode = origin || currentOrigin;
 
     const deduplicated = [];
     const bestByCity = {};
@@ -195,7 +187,7 @@
         const dateStr = formatDate(deal.departure_date);
         const imgSrc = getCityImage(code);
         const stateFallback = getStateFallbackImage(code);
-        const bookingUrl = (deal.booking_url ? escapeAttr(deal.booking_url) : null) || buildBookingUrl(originCode, code, deal.departure_date) || '#';
+        const bookingUrl = deal.booking_url ? escapeAttr(deal.booking_url) : '#';
         const fallbackSvg = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27400%27%20height%3D%27300%27%3E%3Crect%20fill%3D%27%231a73e8%27%20width%3D%27400%27%20height%3D%27300%27%2F%3E%3C%2Fsvg%3E";
         return `
         <a class="deal-card" href="${escapeAttr(bookingUrl)}" target="_blank" rel="noopener" data-destination="${code}">
