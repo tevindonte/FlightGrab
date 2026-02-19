@@ -174,21 +174,50 @@
     return total;
   }
 
-  function applySortAndFilter(deals) {
-    const sortSelect = document.getElementById('sort-select');
-    const nonstopOnly = document.getElementById('filter-nonstop');
-    const maxPriceInput = document.getElementById('filter-max-price');
-    const sortBy = sortSelect ? sortSelect.value : 'price-asc';
-    const nonstop = nonstopOnly ? nonstopOnly.checked : false;
-    const maxPriceVal = maxPriceInput ? parseInt(maxPriceInput.value, 10) : NaN;
+  function getFilterValues() {
+    const nonstopEl = document.getElementById('filter-nonstop') || document.getElementById('filter-nonstop-mobile');
+    const maxEl = document.getElementById('filter-max-price') || document.getElementById('filter-max-price-mobile');
+    const sortEl = document.getElementById('sort-select') || document.getElementById('sort-select-mobile');
+    return {
+      nonstop: nonstopEl ? nonstopEl.checked : false,
+      maxPrice: maxEl ? parseInt(maxEl.value, 10) : NaN,
+      sortBy: sortEl ? sortEl.value : 'price-asc'
+    };
+  }
 
+  function syncFiltersToMobile() {
+    const n = document.getElementById('filter-nonstop');
+    const m = document.getElementById('filter-nonstop-mobile');
+    const p = document.getElementById('filter-max-price');
+    const pm = document.getElementById('filter-max-price-mobile');
+    const s = document.getElementById('sort-select');
+    const sm = document.getElementById('sort-select-mobile');
+    if (n && m) m.checked = n.checked;
+    if (p && pm) pm.value = p.value;
+    if (s && sm) sm.value = s.value;
+  }
+
+  function syncFiltersToDesktop() {
+    const n = document.getElementById('filter-nonstop');
+    const m = document.getElementById('filter-nonstop-mobile');
+    const p = document.getElementById('filter-max-price');
+    const pm = document.getElementById('filter-max-price-mobile');
+    const s = document.getElementById('sort-select');
+    const sm = document.getElementById('sort-select-mobile');
+    if (n && m) n.checked = m.checked;
+    if (p && pm) p.value = pm.value;
+    if (s && sm) s.value = sm.value;
+  }
+
+  function applySortAndFilter(deals) {
+    const f = getFilterValues();
     let filtered = deals.filter(function (d) { return d.price && Number(d.price) > 0; });
-    if (nonstop) filtered = filtered.filter(function (d) { return (d.num_stops || 0) === 0; });
-    if (!isNaN(maxPriceVal) && maxPriceVal > 0) {
-      filtered = filtered.filter(function (d) { return (d.price || 0) * 2 <= maxPriceVal; });
+    if (f.nonstop) filtered = filtered.filter(function (d) { return (d.num_stops || 0) === 0; });
+    if (!isNaN(f.maxPrice) && f.maxPrice > 0) {
+      filtered = filtered.filter(function (d) { return (d.price || 0) * 2 <= f.maxPrice; });
     }
 
-    switch (sortBy) {
+    switch (f.sortBy) {
       case 'price-asc':
         filtered.sort(function (a, b) { return (a.price || 0) - (b.price || 0); });
         break;
@@ -207,6 +236,38 @@
         break;
     }
     return filtered;
+  }
+
+  function filtersAreActive() {
+    const f = getFilterValues();
+    return f.nonstop || (!isNaN(f.maxPrice) && f.maxPrice > 0);
+  }
+
+  function updateFilterIndicators(filteredCount) {
+    const f = getFilterValues();
+    const countEl = document.getElementById('nonstop-count');
+    const countElM = document.getElementById('nonstop-count-mobile');
+    const text = f.nonstop && filteredCount > 0 ? ' (' + filteredCount + ' flights)' : '';
+    if (countEl) countEl.textContent = text;
+    if (countElM) countElM.textContent = text;
+
+    const clearBtn = document.getElementById('clear-filters');
+    const clearBtnM = document.getElementById('clear-filters-mobile');
+    const showClear = filtersAreActive();
+    if (clearBtn) clearBtn.classList.toggle('hidden', !showClear);
+    if (clearBtnM) clearBtnM.classList.toggle('hidden', !showClear);
+  }
+
+  function clearFilters() {
+    const n = document.getElementById('filter-nonstop');
+    const m = document.getElementById('filter-nonstop-mobile');
+    const p = document.getElementById('filter-max-price');
+    const pm = document.getElementById('filter-max-price-mobile');
+    if (n) n.checked = false;
+    if (m) m.checked = false;
+    if (p) p.value = '';
+    if (pm) pm.value = '';
+    refreshFromControls();
   }
 
   function renderCards(deals, searchQuery, mode) {
@@ -231,11 +292,13 @@
     if (filtered.length === 0 && deals.length > 0) {
       if (dealsGrid) dealsGrid.innerHTML = '';
       updateStats([]);
+      updateFilterIndicators(0);
       return;
     }
     if (filtered.length === 0) {
       if (dealsGrid) dealsGrid.innerHTML = '';
       updateStats([]);
+      updateFilterIndicators(0);
       return;
     }
 
@@ -263,7 +326,7 @@
             <p>✈️ ${escapeHtml(airline)}</p>
             <p>⏱️ ${duration}</p>
             <p>📅 Departs ${dateStr}</p>
-            <span class="quick-book">Book Now →</span>
+            <span class="quick-book book-btn">Book Now →</span>
           </div>
           <div class="card-content">
             ${originBadge}
@@ -279,6 +342,7 @@
       }).join('');
       dealsGrid.innerHTML = html;
       updateStats(filtered);
+      updateFilterIndicators(filtered.length);
     } catch (err) {
       console.error('FlightGrab renderCards error:', err);
       dealsGrid.innerHTML = '<p class="error">Error displaying deals. Check console.</p>';
@@ -409,17 +473,65 @@
     });
   }
 
+  function onFilterChange(fromMobile) {
+    if (fromMobile) syncFiltersToDesktop(); else syncFiltersToMobile();
+    refreshFromControls();
+  }
+
   const sortSelect = document.getElementById('sort-select');
-  if (sortSelect) sortSelect.addEventListener('change', refreshFromControls);
+  if (sortSelect) sortSelect.addEventListener('change', function () { onFilterChange(false); });
+
+  const sortSelectM = document.getElementById('sort-select-mobile');
+  if (sortSelectM) sortSelectM.addEventListener('change', function () { onFilterChange(true); });
 
   const filterNonstop = document.getElementById('filter-nonstop');
-  if (filterNonstop) filterNonstop.addEventListener('change', refreshFromControls);
+  if (filterNonstop) filterNonstop.addEventListener('change', function () { onFilterChange(false); });
+
+  const filterNonstopM = document.getElementById('filter-nonstop-mobile');
+  if (filterNonstopM) filterNonstopM.addEventListener('change', function () { onFilterChange(true); });
 
   const filterMaxPrice = document.getElementById('filter-max-price');
   if (filterMaxPrice) {
-    filterMaxPrice.addEventListener('input', refreshFromControls);
-    filterMaxPrice.addEventListener('change', refreshFromControls);
+    filterMaxPrice.addEventListener('input', function () { onFilterChange(false); });
+    filterMaxPrice.addEventListener('change', function () { onFilterChange(false); });
   }
+
+  const filterMaxPriceM = document.getElementById('filter-max-price-mobile');
+  if (filterMaxPriceM) {
+    filterMaxPriceM.addEventListener('input', function () { onFilterChange(true); });
+    filterMaxPriceM.addEventListener('change', function () { onFilterChange(true); });
+  }
+
+  const clearFiltersBtn = document.getElementById('clear-filters');
+  const clearFiltersBtnM = document.getElementById('clear-filters-mobile');
+  if (clearFiltersBtn) clearFiltersBtn.addEventListener('click', clearFilters);
+  if (clearFiltersBtnM) clearFiltersBtnM.addEventListener('click', function () { clearFilters(); closeFilterDrawer(); });
+
+  const mobileFilterBtn = document.getElementById('mobile-filter-btn');
+  const filterDrawer = document.getElementById('filter-drawer');
+  const drawerClose = document.getElementById('drawer-close');
+
+  function openFilterDrawer() {
+    if (filterDrawer) { filterDrawer.classList.add('open'); }
+    if (mobileFilterBtn) { mobileFilterBtn.setAttribute('aria-expanded', 'true'); }
+  }
+
+  function closeFilterDrawer() {
+    if (filterDrawer) { filterDrawer.classList.remove('open'); }
+    if (mobileFilterBtn) { mobileFilterBtn.setAttribute('aria-expanded', 'false'); }
+  }
+
+  if (mobileFilterBtn && filterDrawer) {
+    mobileFilterBtn.addEventListener('click', function () {
+      if (filterDrawer.classList.contains('open')) {
+        closeFilterDrawer();
+      } else {
+        syncFiltersToMobile();
+        openFilterDrawer();
+      }
+    });
+  }
+  if (drawerClose) drawerClose.addEventListener('click', closeFilterDrawer);
 
   if (searchInput) {
     searchInput.addEventListener('input', function () {

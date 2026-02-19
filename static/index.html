@@ -50,26 +50,59 @@
           <option value="flexible">Flexible (cheapest in 30 days)</option>
         </select>
       </div>
-      <div class="controls-bar">
-        <div class="sort-section">
-          <label for="sort-select">Sort by:</label>
-          <select id="sort-select" aria-label="Sort deals">
-            <option value="price-asc" selected>Price: Low to High</option>
-            <option value="price-desc">Price: High to Low</option>
-            <option value="date-asc">Date: Soonest First</option>
-            <option value="duration-asc">Duration: Shortest</option>
-          </select>
+      <button type="button" class="mobile-filter-btn" id="mobile-filter-btn" aria-expanded="false" aria-controls="filter-drawer">
+        Filters & Sort
+      </button>
+      <div class="controls-bar-wrapper" id="controls-bar-wrapper">
+        <div class="controls-bar">
+          <div class="sort-section">
+            <label for="sort-select">Sort by:</label>
+            <select id="sort-select" aria-label="Sort deals">
+              <option value="price-asc" selected>Price: Low to High</option>
+              <option value="price-desc">Price: High to Low</option>
+              <option value="date-asc">Date: Soonest First</option>
+              <option value="duration-asc">Duration: Shortest</option>
+            </select>
+          </div>
+          <div class="filter-section">
+            <label class="filter-checkbox">
+              <input type="checkbox" id="filter-nonstop" aria-label="Nonstop only">
+              Nonstop only
+              <span class="filter-count" id="nonstop-count"></span>
+            </label>
+            <label>
+              Max price:
+              <input type="number" id="filter-max-price" placeholder="e.g. 200" min="0" aria-label="Maximum round-trip price">
+            </label>
+            <button type="button" class="clear-filters-btn hidden" id="clear-filters">Clear all filters</button>
+          </div>
         </div>
-        <div class="filter-section">
-          <label class="filter-checkbox">
-            <input type="checkbox" id="filter-nonstop" aria-label="Nonstop only">
-            Nonstop only
-          </label>
-          <label>
-            Max price:
-            <input type="number" id="filter-max-price" placeholder="e.g. 200" min="0" aria-label="Maximum round-trip price">
-          </label>
+      </div>
+      <div class="filter-drawer" id="filter-drawer" role="region" aria-label="Filters and sort options">
+        <div class="controls-bar">
+          <div class="sort-section">
+            <label for="sort-select-mobile">Sort by:</label>
+            <select id="sort-select-mobile" aria-label="Sort deals">
+              <option value="price-asc" selected>Price: Low to High</option>
+              <option value="price-desc">Price: High to Low</option>
+              <option value="date-asc">Date: Soonest First</option>
+              <option value="duration-asc">Duration: Shortest</option>
+            </select>
+          </div>
+          <div class="filter-section">
+            <label class="filter-checkbox">
+              <input type="checkbox" id="filter-nonstop-mobile" aria-label="Nonstop only">
+              Nonstop only
+              <span class="filter-count" id="nonstop-count-mobile"></span>
+            </label>
+            <label>
+              Max price:
+              <input type="number" id="filter-max-price-mobile" placeholder="e.g. 200" min="0" aria-label="Maximum round-trip price">
+            </label>
+            <button type="button" class="clear-filters-btn hidden" id="clear-filters-mobile">Clear all filters</button>
+          </div>
         </div>
+        <button type="button" class="drawer-close" id="drawer-close">Done</button>
       </div>
     </div>
 
