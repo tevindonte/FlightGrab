@@ -79,6 +79,19 @@ async def list_airports():
         db.close()
 
 
+@app.get("/api/deals/all")
+async def get_all_deals(
+    period: str = Query("week", pattern="^(today|weekend|week|month)$"),
+):
+    """Get cheapest flights to each destination from ANY origin. Used for homepage global deals."""
+    db = get_db()
+    try:
+        results = db.get_cheapest_from_all_origins(time_filter=period)
+        return {"origin": "ALL", "period": period, "deals": results}
+    finally:
+        db.close()
+
+
 @app.get("/api/deals")
 async def get_deals(
     origin: str = Query(..., min_length=3, max_length=3),

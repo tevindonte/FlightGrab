@@ -190,7 +190,7 @@ class FlightDatabase:
                 destination, price, airline, departure_date,
                 departure_time, google_flights_url, duration, num_stops
             FROM current_prices
-            WHERE origin = %s AND {cond}
+            WHERE origin = %s AND {cond} AND price > 0
             ORDER BY destination, price ASC
         """, (origin,))
         rows = cursor.fetchall()
@@ -215,6 +215,57 @@ class FlightDatabase:
                     'booking_url': r[5],
                     'duration': r[6] if len(r) > 6 else None,
                     'num_stops': _num_stops(r[7]) if len(r) > 7 else 0,
+                }
+                for r in rows
+            ],
+            key=lambda x: x['price']
+        )[:50]
+
+    def get_cheapest_from_all_origins(self, time_filter='week'):
+        """
+        Get cheapest flight to each destination from ANY origin.
+        Used for homepage global deals view.
+        """
+        cursor = self.conn.cursor()
+        date_conditions = {
+            'today': "departure_date = CURRENT_DATE",
+            'weekend': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '3 days'",
+            'week': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'",
+            'month': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'"
+        }
+        cond = date_conditions.get(time_filter, date_conditions['week'])
+
+        cursor.execute(f"""
+            SELECT DISTINCT ON (destination)
+                origin, destination, price, airline, departure_date,
+                departure_time, google_flights_url, duration, num_stops
+            FROM current_prices
+            WHERE {cond} AND price > 0
+            ORDER BY destination, price ASC
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+
+        def _num_stops(n):
+            if n is None:
+                return 0
+            try:
+                return int(n)
+            except (TypeError, ValueError):
+                return 0
+
+        return sorted(
+            [
+                {
+                    'origin': r[0],
+                    'destination': r[1],
+                    'price': float(r[2]),
+                    'airline': r[3],
+                    'departure_date': r[4].isoformat() if r[4] else None,
+                    'departure_time': r[5],
+                    'booking_url': r[6],
+                    'duration': r[7] if len(r) > 7 else None,
+                    'num_stops': _num_stops(r[8]) if len(r) > 8 else 0,
                 }
                 for r in rows
             ],

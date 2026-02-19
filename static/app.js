@@ -96,7 +96,8 @@
 
   let airports = [];
   let allDeals = [];
-  let currentOrigin = '';
+  let currentOrigin = null;
+  let currentMode = 'all';
 
   function setLoading(show) {
     if (loadingEl) loadingEl.classList.toggle('hidden', !show);
@@ -147,13 +148,15 @@
     const q = query.trim().toLowerCase();
     const city = getCityName(deal.destination).toLowerCase();
     const code = deal.destination.toLowerCase();
-    return city.includes(q) || code.includes(q);
+    const originCode = (deal.origin || '').toLowerCase();
+    return city.includes(q) || code.includes(q) || (deal.origin && originCode.includes(q));
   }
 
-  function renderCards(deals, searchQuery, origin) {
-    let filtered = searchQuery
-      ? deals.filter(d => cardMatchesSearch(d, searchQuery))
-      : deals;
+  function renderCards(deals, searchQuery, mode) {
+    let filtered = deals.filter(d => d.price && Number(d.price) > 0);
+    filtered = searchQuery
+      ? filtered.filter(d => cardMatchesSearch(d, searchQuery))
+      : filtered;
 
     const deduplicated = [];
     const bestByCity = {};
@@ -189,10 +192,14 @@
         const stateFallback = getStateFallbackImage(code);
         const bookingUrl = deal.booking_url ? escapeAttr(deal.booking_url) : '#';
         const fallbackSvg = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27400%27%20height%3D%27300%27%3E%3Crect%20fill%3D%27%231a73e8%27%20width%3D%27400%27%20height%3D%27300%27%2F%3E%3C%2Fsvg%3E";
+        const originBadge = mode === 'all' && deal.origin
+          ? `<span class="origin-badge">from ${deal.origin}</span>`
+          : '';
         return `
         <a class="deal-card" href="${escapeAttr(bookingUrl)}" target="_blank" rel="noopener" data-destination="${code}">
           <img class="card-image" src="${imgSrc}" alt="${cityName}" loading="lazy" data-fallback="${stateFallback}" data-final-fallback="${fallbackSvg}" onerror="if(this.dataset.tried){this.src=this.dataset.finalFallback}else{this.dataset.tried=1;this.src=this.dataset.fallback}">
           <div class="card-content">
+            ${originBadge}
             <h3 class="city-name">${cityName}</h3>
             <p class="airport-code">${deal.destination}</p>
             <p class="flight-info">${duration}, ${stops}</p>
@@ -210,21 +217,44 @@
     }
   }
 
+  const dealsHeading = document.getElementById('deals-heading');
+
+  function updateDealsHeading(mode, origin) {
+    if (!dealsHeading) return;
+    if (mode === 'all') {
+      dealsHeading.textContent = 'Cheapest Flights This Week (From Any Airport)';
+    } else {
+      const cityName = getCityName(origin);
+      dealsHeading.textContent = `Cheapest Flights from ${cityName} This Week`;
+    }
+  }
+
   async function fetchDeals(origin) {
     if (!origin) {
       dealsGrid.innerHTML = '';
       return;
     }
-    currentOrigin = origin;
     setLoading(true);
     setError(null);
     try {
-      // Use 'week' so we show data when DB has future dates only; use 'today' after running incremental for current day
-      const res = await fetch(`${API}/api/deals?origin=${encodeURIComponent(origin)}&period=week`);
-      if (!res.ok) throw new Error(res.statusText);
-      const data = await res.json();
+      let data;
+      if (origin === 'ALL') {
+        currentMode = 'all';
+        currentOrigin = null;
+        const res = await fetch(`${API}/api/deals/all?period=week`);
+        if (!res.ok) throw new Error(res.statusText);
+        data = await res.json();
+        updateDealsHeading('all');
+      } else {
+        currentMode = 'specific';
+        currentOrigin = origin;
+        const res = await fetch(`${API}/api/deals?origin=${encodeURIComponent(origin)}&period=week`);
+        if (!res.ok) throw new Error(res.statusText);
+        data = await res.json();
+        updateDealsHeading('specific', origin);
+      }
       allDeals = data.deals || [];
-      renderCards(allDeals, searchInput ? searchInput.value.trim() : '', origin);
+      renderCards(allDeals, searchInput ? searchInput.value.trim() : '', currentMode);
     } catch (e) {
       setError(e.message || 'Failed to load deals');
       allDeals = [];
@@ -242,21 +272,17 @@
       airports = Array.isArray(data.airports) && data.airports.length > 0
         ? data.airports
         : FALLBACK_ORIGINS;
-      originSelect.innerHTML = '<option value="">Select airport…</option>' +
-        airports.map(code => `<option value="${code}">${code}</option>`).join('');
-      const first = airports[0];
-      if (first) {
-        originSelect.value = first;
-        fetchDeals(first);
-      } else {
-        setError('No airport data. Run the scraper first.');
-      }
+      const allOption = '<option value="ALL">All Airports (Cheapest Deals)</option>';
+      originSelect.innerHTML = allOption +
+        airports.map(code => `<option value="${code}">${getCityName(code)} (${code})</option>`).join('');
+      originSelect.value = 'ALL';
+      fetchDeals('ALL');
     } catch (e) {
       airports = FALLBACK_ORIGINS;
-      originSelect.innerHTML = '<option value="">Select airport…</option>' +
-        airports.map(code => `<option value="${code}">${code}</option>`).join('');
-      originSelect.value = FALLBACK_ORIGINS[0];
-      fetchDeals(FALLBACK_ORIGINS[0]);
+      originSelect.innerHTML = '<option value="ALL">All Airports (Cheapest Deals)</option>' +
+        airports.map(code => `<option value="${code}">${getCityName(code)} (${code})</option>`).join('');
+      originSelect.value = 'ALL';
+      fetchDeals('ALL');
     }
   }
 
@@ -267,7 +293,7 @@
   if (searchInput) {
     searchInput.addEventListener('input', function () {
       const q = this.value.trim();
-      renderCards(allDeals, q, currentOrigin);
+      renderCards(allDeals, q, currentMode);
     });
     searchInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') e.preventDefault();

@@ -103,6 +103,24 @@ main.container {
   outline: none;
 }
 
+.deals-heading {
+  margin: 0 0 20px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.origin-badge {
+  display: inline-block;
+  background: #667eea;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
 .search-section {
   margin-bottom: 28px;
 }
