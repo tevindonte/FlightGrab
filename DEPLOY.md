@@ -112,6 +112,21 @@ Push the change and re-deploy. For a one-off full baseline, trigger **flightgrab
 | Baseline | Run **once**: Dashboard → flightgrab-baseline → **Trigger Run**. |
 | Incremental | Runs automatically daily at 3 AM UTC (or your chosen schedule). |
 
+## 8. Uptime & health checks (Render free tier)
+
+**Free tier services spin down after ~15 min of inactivity.** The first request after spin-down triggers a cold start (30–60 sec), which can cause health check timeouts.
+
+**To keep the service awake:**
+- Use **UptimeRobot** (free) or similar: create an HTTP monitor for `https://your-app.onrender.com/ping`, interval every **5 minutes**.
+- Use **GET** or **HEAD** (both work). The `/ping` and `/healthz` endpoints are lightweight (no DB) and support both methods.
+
+**Render health check** is set to `/ping` (no database) for faster response when the service is warm.
+
+**If you see "server failure" or "health check timed out":**
+- Render may auto-restart; the service often recovers.
+- Ensure UptimeRobot (or cron) pings `/ping` every 5 min to prevent spin-down.
+- On paid plans, services don’t spin down.
+
 ## Troubleshooting
 
 - **Cron job fails**: Check **Logs** for that cron service. Ensure `DATABASE_URL` is set and Neon allows connections from Render IPs (Neon usually allows all by default).

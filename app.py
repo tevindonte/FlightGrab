@@ -44,11 +44,14 @@ def get_db():
 
 
 @app.get("/ping")
+@app.head("/ping")
 @app.get("/healthz")
+@app.head("/healthz")
 async def ping():
     """
     Lightweight keep-alive endpoint. No DB call.
     Use for: Render health checks, UptimeRobot / cron pings to keep the service active.
+    Supports both GET and HEAD (monitors often use HEAD).
     """
     return {"status": "ok", "ping": "pong"}
 
