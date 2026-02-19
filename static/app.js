@@ -117,8 +117,15 @@
   function formatDate(isoDate) {
     if (!isoDate) return '—';
     const d = new Date(isoDate + 'T12:00:00');
-    const options = { weekday: 'short', month: 'numeric', day: 'numeric' };
-    return d.toLocaleDateString('en-US', options);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    today.setHours(0, 0, 0, 0);
+    tomorrow.setHours(0, 0, 0, 0);
+    d.setHours(0, 0, 0, 0);
+    if (d.getTime() === today.getTime()) return 'Today';
+    if (d.getTime() === tomorrow.getTime()) return 'Tomorrow';
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   }
 
   function formatStops(numStops) {
@@ -150,9 +157,22 @@
   }
 
   function renderCards(deals, searchQuery, origin) {
-    const filtered = searchQuery
+    let filtered = searchQuery
       ? deals.filter(d => cardMatchesSearch(d, searchQuery))
       : deals;
+
+    const originCode = origin || currentOrigin;
+
+    const deduplicated = [];
+    const bestByCity = {};
+    for (const d of filtered) {
+      const cityKey = getCityName(d.destination);
+      const price = Number(d.price) || 999999;
+      if (!bestByCity[cityKey] || price < (Number(bestByCity[cityKey].price) || 999999)) {
+        bestByCity[cityKey] = d;
+      }
+    }
+    filtered = Object.values(bestByCity).sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
 
     if (noResultsEl) noResultsEl.classList.toggle('hidden', filtered.length > 0 || deals.length === 0);
     if (filtered.length === 0 && deals.length > 0) {
@@ -165,7 +185,6 @@
     }
 
     if (!dealsGrid) return;
-    const originCode = origin || currentOrigin;
     try {
       const html = filtered.map(deal => {
         const cityName = getCityName(deal.destination);
@@ -176,7 +195,7 @@
         const dateStr = formatDate(deal.departure_date);
         const imgSrc = getCityImage(code);
         const stateFallback = getStateFallbackImage(code);
-        const bookingUrl = buildBookingUrl(originCode, code, deal.departure_date) || escapeAttr(deal.booking_url) || '#';
+        const bookingUrl = (deal.booking_url ? escapeAttr(deal.booking_url) : null) || buildBookingUrl(originCode, code, deal.departure_date) || '#';
         const fallbackSvg = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27400%27%20height%3D%27300%27%3E%3Crect%20fill%3D%27%231a73e8%27%20width%3D%27400%27%20height%3D%27300%27%2F%3E%3C%2Fsvg%3E";
         return `
         <a class="deal-card" href="${escapeAttr(bookingUrl)}" target="_blank" rel="noopener" data-destination="${code}">
