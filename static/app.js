@@ -32,6 +32,11 @@
   };
 
   function getCityImage(airportCode) {
+    if (!airportCode) return '/static/images/states/georgia.jpg';
+    return `/static/images/airports/${airportCode}.jpg`;
+  }
+
+  function getStateFallbackImage(airportCode) {
     const state = AIRPORT_TO_STATE[airportCode] || 'georgia';
     return `/static/images/states/${state}.jpg`;
   }
@@ -138,7 +143,13 @@
     return city.includes(q) || code.includes(q);
   }
 
-  function renderCards(deals, searchQuery) {
+  function buildBookingUrl(origin, destination, departureDate) {
+    if (!origin || !destination || !departureDate) return '#';
+    const q = `Flights from ${origin} to ${destination} on ${departureDate}`;
+    return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}`;
+  }
+
+  function renderCards(deals, searchQuery, origin) {
     const filtered = searchQuery
       ? deals.filter(d => cardMatchesSearch(d, searchQuery))
       : deals;
@@ -154,6 +165,7 @@
     }
 
     if (!dealsGrid) return;
+    const originCode = origin || currentOrigin;
     try {
       const html = filtered.map(deal => {
         const cityName = getCityName(deal.destination);
@@ -163,11 +175,12 @@
         const stops = formatStops(deal.num_stops != null ? deal.num_stops : 0);
         const dateStr = formatDate(deal.departure_date);
         const imgSrc = getCityImage(code);
-        const bookingUrl = escapeAttr(deal.booking_url) || '#';
+        const stateFallback = getStateFallbackImage(code);
+        const bookingUrl = buildBookingUrl(originCode, code, deal.departure_date) || escapeAttr(deal.booking_url) || '#';
         const fallbackSvg = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27400%27%20height%3D%27300%27%3E%3Crect%20fill%3D%27%231a73e8%27%20width%3D%27400%27%20height%3D%27300%27%2F%3E%3C%2Fsvg%3E";
         return `
-        <a class="deal-card" href="${bookingUrl}" target="_blank" rel="noopener" data-destination="${code}">
-          <img class="card-image" src="${imgSrc}" alt="${cityName}" loading="lazy" onerror="this.src='${fallbackSvg}'">
+        <a class="deal-card" href="${escapeAttr(bookingUrl)}" target="_blank" rel="noopener" data-destination="${code}">
+          <img class="card-image" src="${imgSrc}" alt="${cityName}" loading="lazy" data-fallback="${stateFallback}" data-final-fallback="${fallbackSvg}" onerror="if(this.dataset.tried){this.src=this.dataset.finalFallback}else{this.dataset.tried=1;this.src=this.dataset.fallback}">
           <div class="card-content">
             <h3 class="city-name">${cityName}</h3>
             <p class="airport-code">${deal.destination}</p>
@@ -200,7 +213,7 @@
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
       allDeals = data.deals || [];
-      renderCards(allDeals, searchInput ? searchInput.value.trim() : '');
+      renderCards(allDeals, searchInput ? searchInput.value.trim() : '', origin);
     } catch (e) {
       setError(e.message || 'Failed to load deals');
       allDeals = [];
@@ -243,7 +256,7 @@
   if (searchInput) {
     searchInput.addEventListener('input', function () {
       const q = this.value.trim();
-      renderCards(allDeals, q);
+      renderCards(allDeals, q, currentOrigin);
     });
     searchInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') e.preventDefault();
