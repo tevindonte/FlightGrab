@@ -29,7 +29,49 @@
       </select>
     </div>
 
-    <h2 id="deals-heading" class="deals-heading">Cheapest Flights This Week</h2>
+    <div class="results-header">
+      <h2 id="deals-heading" class="deals-heading">Cheapest Flights This Week</h2>
+      <div class="stats" id="stats" aria-live="polite">
+        <span class="stat"><strong id="deal-count">0</strong> destinations</span>
+        <span class="stat">Starting from <strong id="cheapest-price">—</strong></span>
+        <span class="stat">Updated <strong id="last-update">—</strong></span>
+      </div>
+    </div>
+
+    <div class="controls-row">
+      <div class="date-picker">
+        <label for="date-range">Departure dates:</label>
+        <select id="date-range" aria-label="Date range">
+          <option value="today">Today</option>
+          <option value="tomorrow">Tomorrow</option>
+          <option value="weekend">This Weekend</option>
+          <option value="week" selected>This Week</option>
+          <option value="month">This Month</option>
+          <option value="flexible">Flexible (cheapest in 30 days)</option>
+        </select>
+      </div>
+      <div class="controls-bar">
+        <div class="sort-section">
+          <label for="sort-select">Sort by:</label>
+          <select id="sort-select" aria-label="Sort deals">
+            <option value="price-asc" selected>Price: Low to High</option>
+            <option value="price-desc">Price: High to Low</option>
+            <option value="date-asc">Date: Soonest First</option>
+            <option value="duration-asc">Duration: Shortest</option>
+          </select>
+        </div>
+        <div class="filter-section">
+          <label class="filter-checkbox">
+            <input type="checkbox" id="filter-nonstop" aria-label="Nonstop only">
+            Nonstop only
+          </label>
+          <label>
+            Max price:
+            <input type="number" id="filter-max-price" placeholder="e.g. 200" min="0" aria-label="Maximum round-trip price">
+          </label>
+        </div>
+      </div>
+    </div>
 
     <div class="search-section">
       <input
@@ -41,7 +83,14 @@
       >
     </div>
 
-    <div id="loading" class="loading hidden">Loading deals...</div>
+    <div id="loading" class="skeleton-grid hidden">
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+    </div>
     <div id="error" class="error hidden"></div>
     <div id="no-results" class="no-results hidden">No results match your search.</div>
 

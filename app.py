@@ -81,7 +81,7 @@ async def list_airports():
 
 @app.get("/api/deals/all")
 async def get_all_deals(
-    period: str = Query("week", pattern="^(today|weekend|week|month)$"),
+    period: str = Query("week", pattern="^(today|tomorrow|weekend|week|month|flexible)$"),
 ):
     """Get cheapest flights to each destination from ANY origin. Used for homepage global deals."""
     db = get_db()
@@ -95,9 +95,9 @@ async def get_all_deals(
 @app.get("/api/deals")
 async def get_deals(
     origin: str = Query(..., min_length=3, max_length=3),
-    period: str = Query("today", pattern="^(today|weekend|week|month)$"),
+    period: str = Query("week", pattern="^(today|tomorrow|weekend|week|month|flexible)$"),
 ):
-    """Get cheapest flights from an origin (by departure date: today, weekend, week, month)."""
+    """Get cheapest flights from an origin (by departure date: today, tomorrow, weekend, week, month, flexible)."""
     origin = origin.upper()
     if origin not in TOP_50_US_AIRPORTS:
         raise HTTPException(status_code=400, detail=f"Unknown airport: {origin}")
@@ -113,7 +113,7 @@ async def get_deals(
 async def search_route(
     origin: str = Query(..., min_length=3, max_length=3),
     destination: str = Query(..., min_length=3, max_length=3),
-    period: str = Query("today", pattern="^(today|weekend|week|month)$"),
+    period: str = Query("today", pattern="^(today|tomorrow|weekend|week|month|flexible)$"),
 ):
     """Get best price for a specific route (by departure window)."""
     origin, destination = origin.upper(), destination.upper()

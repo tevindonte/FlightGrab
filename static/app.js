@@ -101,6 +101,7 @@
 
   function setLoading(show) {
     if (loadingEl) loadingEl.classList.toggle('hidden', !show);
+    if (dealsGrid) dealsGrid.classList.toggle('hidden', show);
     if (show) {
       if (errorEl) errorEl.classList.add('hidden');
       if (noResultsEl) noResultsEl.classList.add('hidden');
@@ -143,6 +144,15 @@
     return String(str).replace(/\r?\n/g, ' ').replace(/"/g, '&quot;').trim();
   }
 
+  function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
   function cardMatchesSearch(deal, query) {
     if (!query || !query.trim()) return true;
     const q = query.trim().toLowerCase();
@@ -152,30 +162,80 @@
     return city.includes(q) || code.includes(q) || (deal.origin && originCode.includes(q));
   }
 
+  function parseDuration(str) {
+    if (!str) return 999999;
+    const parts = str.match(/(\d+)\s*hr|(\d+)\s*min/g);
+    if (!parts) return 999999;
+    let total = 0;
+    parts.forEach(function (m) {
+      if (m.includes('hr')) total += parseInt(m, 10) * 60;
+      if (m.includes('min')) total += parseInt(m, 10);
+    });
+    return total;
+  }
+
+  function applySortAndFilter(deals) {
+    const sortSelect = document.getElementById('sort-select');
+    const nonstopOnly = document.getElementById('filter-nonstop');
+    const maxPriceInput = document.getElementById('filter-max-price');
+    const sortBy = sortSelect ? sortSelect.value : 'price-asc';
+    const nonstop = nonstopOnly ? nonstopOnly.checked : false;
+    const maxPriceVal = maxPriceInput ? parseInt(maxPriceInput.value, 10) : NaN;
+
+    let filtered = deals.filter(function (d) { return d.price && Number(d.price) > 0; });
+    if (nonstop) filtered = filtered.filter(function (d) { return (d.num_stops || 0) === 0; });
+    if (!isNaN(maxPriceVal) && maxPriceVal > 0) {
+      filtered = filtered.filter(function (d) { return (d.price || 0) * 2 <= maxPriceVal; });
+    }
+
+    switch (sortBy) {
+      case 'price-asc':
+        filtered.sort(function (a, b) { return (a.price || 0) - (b.price || 0); });
+        break;
+      case 'price-desc':
+        filtered.sort(function (a, b) { return (b.price || 0) - (a.price || 0); });
+        break;
+      case 'date-asc':
+        filtered.sort(function (a, b) {
+          return new Date(a.departure_date || 0) - new Date(b.departure_date || 0);
+        });
+        break;
+      case 'duration-asc':
+        filtered.sort(function (a, b) {
+          return parseDuration(a.duration) - parseDuration(b.duration);
+        });
+        break;
+    }
+    return filtered;
+  }
+
   function renderCards(deals, searchQuery, mode) {
-    let filtered = deals.filter(d => d.price && Number(d.price) > 0);
+    let filtered = deals.filter(function (d) { return d.price && Number(d.price) > 0; });
     filtered = searchQuery
-      ? filtered.filter(d => cardMatchesSearch(d, searchQuery))
+      ? filtered.filter(function (d) { return cardMatchesSearch(d, searchQuery); })
       : filtered;
 
-    const deduplicated = [];
     const bestByCity = {};
-    for (const d of filtered) {
+    for (let i = 0; i < filtered.length; i++) {
+      const d = filtered[i];
       const cityKey = getCityName(d.destination);
       const price = Number(d.price) || 999999;
       if (!bestByCity[cityKey] || price < (Number(bestByCity[cityKey].price) || 999999)) {
         bestByCity[cityKey] = d;
       }
     }
-    filtered = Object.values(bestByCity).sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+    filtered = Object.keys(bestByCity).map(function (k) { return bestByCity[k]; });
+    filtered = applySortAndFilter(filtered);
 
     if (noResultsEl) noResultsEl.classList.toggle('hidden', filtered.length > 0 || deals.length === 0);
     if (filtered.length === 0 && deals.length > 0) {
       if (dealsGrid) dealsGrid.innerHTML = '';
+      updateStats([]);
       return;
     }
     if (filtered.length === 0) {
       if (dealsGrid) dealsGrid.innerHTML = '';
+      updateStats([]);
       return;
     }
 
@@ -195,9 +255,16 @@
         const originBadge = mode === 'all' && deal.origin
           ? `<span class="origin-badge">from ${deal.origin}</span>`
           : '';
+        const airline = deal.airline || 'Multiple airlines';
         return `
         <a class="deal-card" href="${escapeAttr(bookingUrl)}" target="_blank" rel="noopener" data-destination="${code}">
           <img class="card-image" src="${imgSrc}" alt="${cityName}" loading="lazy" data-fallback="${stateFallback}" data-final-fallback="${fallbackSvg}" onerror="if(this.dataset.tried){this.src=this.dataset.finalFallback}else{this.dataset.tried=1;this.src=this.dataset.fallback}">
+          <div class="preview-details">
+            <p>✈️ ${escapeHtml(airline)}</p>
+            <p>⏱️ ${duration}</p>
+            <p>📅 Departs ${dateStr}</p>
+            <span class="quick-book">Book Now →</span>
+          </div>
           <div class="card-content">
             ${originBadge}
             <h3 class="city-name">${cityName}</h3>
@@ -211,6 +278,7 @@
       `;
       }).join('');
       dealsGrid.innerHTML = html;
+      updateStats(filtered);
     } catch (err) {
       console.error('FlightGrab renderCards error:', err);
       dealsGrid.innerHTML = '<p class="error">Error displaying deals. Check console.</p>';
@@ -219,13 +287,51 @@
 
   const dealsHeading = document.getElementById('deals-heading');
 
+  function getPeriod() {
+    const range = document.getElementById('date-range');
+    return range ? range.value : 'week';
+  }
+
+  function updateStats(deals) {
+    const countEl = document.getElementById('deal-count');
+    const priceEl = document.getElementById('cheapest-price');
+    const updateEl = document.getElementById('last-update');
+    if (countEl) countEl.textContent = deals.length;
+    if (priceEl) {
+      if (deals.length === 0) {
+        priceEl.textContent = '—';
+      } else {
+        const cheapest = Math.min.apply(null, deals.map(function (d) { return (d.price || 0) * 2; }));
+        priceEl.textContent = '$' + Math.round(cheapest);
+      }
+    }
+    if (updateEl) {
+      updateEl.textContent = new Date().toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+    }
+  }
+
+  const PERIOD_LABELS = {
+    today: 'Today',
+    tomorrow: 'Tomorrow',
+    weekend: 'This Weekend',
+    week: 'This Week',
+    month: 'This Month',
+    flexible: 'Flexible (30 days)'
+  };
+
   function updateDealsHeading(mode, origin) {
     if (!dealsHeading) return;
+    const periodLabel = PERIOD_LABELS[getPeriod()] || 'This Week';
     if (mode === 'all') {
-      dealsHeading.textContent = 'Cheapest Flights This Week (From Any Airport)';
+      dealsHeading.textContent = 'Cheapest Flights ' + periodLabel + ' (From Any Airport)';
     } else {
       const cityName = getCityName(origin);
-      dealsHeading.textContent = `Cheapest Flights from ${cityName} This Week`;
+      dealsHeading.textContent = 'Cheapest Flights from ' + cityName + ' ' + periodLabel;
     }
   }
 
@@ -237,18 +343,19 @@
     setLoading(true);
     setError(null);
     try {
+      const period = getPeriod();
       let data;
       if (origin === 'ALL') {
         currentMode = 'all';
         currentOrigin = null;
-        const res = await fetch(`${API}/api/deals/all?period=week`);
+        const res = await fetch(`${API}/api/deals/all?period=${encodeURIComponent(period)}`);
         if (!res.ok) throw new Error(res.statusText);
         data = await res.json();
         updateDealsHeading('all');
       } else {
         currentMode = 'specific';
         currentOrigin = origin;
-        const res = await fetch(`${API}/api/deals?origin=${encodeURIComponent(origin)}&period=week`);
+        const res = await fetch(`${API}/api/deals?origin=${encodeURIComponent(origin)}&period=${encodeURIComponent(period)}`);
         if (!res.ok) throw new Error(res.statusText);
         data = await res.json();
         updateDealsHeading('specific', origin);
@@ -286,9 +393,33 @@
     }
   }
 
+  function refreshFromControls() {
+    const searchQ = searchInput ? searchInput.value.trim() : '';
+    renderCards(allDeals, searchQ, currentMode);
+  }
+
   originSelect.addEventListener('change', function () {
     fetchDeals(this.value);
   });
+
+  const dateRangeEl = document.getElementById('date-range');
+  if (dateRangeEl) {
+    dateRangeEl.addEventListener('change', function () {
+      fetchDeals(originSelect.value);
+    });
+  }
+
+  const sortSelect = document.getElementById('sort-select');
+  if (sortSelect) sortSelect.addEventListener('change', refreshFromControls);
+
+  const filterNonstop = document.getElementById('filter-nonstop');
+  if (filterNonstop) filterNonstop.addEventListener('change', refreshFromControls);
+
+  const filterMaxPrice = document.getElementById('filter-max-price');
+  if (filterMaxPrice) {
+    filterMaxPrice.addEventListener('input', refreshFromControls);
+    filterMaxPrice.addEventListener('change', refreshFromControls);
+  }
 
   if (searchInput) {
     searchInput.addEventListener('input', function () {

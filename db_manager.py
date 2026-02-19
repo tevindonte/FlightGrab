@@ -179,9 +179,11 @@ class FlightDatabase:
         cursor = self.conn.cursor()
         date_conditions = {
             'today': "departure_date = CURRENT_DATE",
+            'tomorrow': "departure_date = CURRENT_DATE + INTERVAL '1 day'",
             'weekend': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '3 days'",
             'week': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'",
-            'month': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'"
+            'month': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'",
+            'flexible': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'"
         }
         cond = date_conditions.get(time_filter, date_conditions['today'])
 
@@ -229,9 +231,11 @@ class FlightDatabase:
         cursor = self.conn.cursor()
         date_conditions = {
             'today': "departure_date = CURRENT_DATE",
+            'tomorrow': "departure_date = CURRENT_DATE + INTERVAL '1 day'",
             'weekend': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '3 days'",
             'week': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'",
-            'month': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'"
+            'month': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'",
+            'flexible': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'"
         }
         cond = date_conditions.get(time_filter, date_conditions['week'])
 
@@ -289,9 +293,11 @@ class FlightDatabase:
         cursor = self.conn.cursor()
         date_conditions = {
             'today': "departure_date = CURRENT_DATE",
+            'tomorrow': "departure_date = CURRENT_DATE + INTERVAL '1 day'",
             'weekend': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '3 days'",
             'week': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'",
-            'month': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'"
+            'month': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'",
+            'flexible': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'"
         }
         cond = date_conditions.get(time_filter, date_conditions['today'])
         cursor.execute(f"""
