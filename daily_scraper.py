@@ -3,6 +3,7 @@ Daily scraping job – rolling 30-day window.
 
 - Render (512 MB): run incremental only. Baseline = 7 days, low-memory (or delete baseline cron).
 - Local (full baseline): set FULL_BASELINE=1 and run baseline → 31 days, multi-worker, ~1–3 hr.
+- GitHub Actions: set WORKER_ID=1|2|3|4 to run distributed incremental (4 workers, 7 GB each).
 """
 
 import gc
@@ -20,10 +21,19 @@ from flight_scraper import (
 )
 from db_manager import FlightDatabase
 
-# Origins: 5 = test, 50 = full
+# Worker distribution for GitHub Actions (4 workers × ~12–13 origins)
+WORKER_ID = os.environ.get("WORKER_ID", "")
+WORKER_ASSIGNMENTS = {
+    "1": TOP_50_US_AIRPORTS[0:13],   # ATL … LAX
+    "2": TOP_50_US_AIRPORTS[13:26],  # SEA … PHL
+    "3": TOP_50_US_AIRPORTS[26:38],  # BWI … PDX
+    "4": TOP_50_US_AIRPORTS[38:50],  # HNL … ANC
+}
+
+# Origins: 5 = test, 50 = full (used when WORKER_ID not set)
 NUM_ORIGINS = 5
-# Incremental: 1 worker for 512 MB (Render). Use more if you have RAM.
-NUM_WORKERS = 1
+# Incremental: 1 worker for 512 MB (Render). 3 workers for GitHub Actions (7 GB).
+NUM_WORKERS = 3 if WORKER_ID else 1
 
 # Full baseline (local): set FULL_BASELINE=1 → 31 days, multi-worker
 FULL_BASELINE = os.environ.get("FULL_BASELINE", "").lower() in ("1", "true", "yes")
@@ -132,17 +142,22 @@ def _run_baseline_low_memory():
 def run_incremental_scrape():
     """
     DAILY INCREMENTAL – refresh today + add new +30 day.
-    Uses 1 worker to stay under 512 MB.
+    Uses 1 worker (512 MB) or 3 workers (7 GB) when WORKER_ID is set.
     """
+    origins = WORKER_ASSIGNMENTS.get(WORKER_ID, TOP_50_US_AIRPORTS[:NUM_ORIGINS])
+
     print("=" * 60)
     print(f"INCREMENTAL SCRAPE - {datetime.now()}")
+    if WORKER_ID:
+        print(f"Worker {WORKER_ID}: {len(origins)} origins {origins[0]}…{origins[-1]}")
+    else:
+        print(f"Origins: {origins}")
     print("=" * 60)
 
     db = FlightDatabase()
     db.connect()
     db.create_tables()
 
-    origins = TOP_50_US_AIRPORTS[:NUM_ORIGINS]
     results = scrape_incremental(
         origins=origins,
         destinations=TOP_50_US_AIRPORTS,

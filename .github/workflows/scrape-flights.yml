@@ -1,0 +1,101 @@
+# Daily Flight Scraper – GitHub Actions (7 GB RAM per worker, FREE)
+# Runs 4 parallel workers, each scraping ~12–13 origins
+# Schedule: 3 AM UTC daily
+
+name: Daily Flight Scraper
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      worker:
+        description: 'Worker to run (1-4 or "all")'
+        required: false
+        default: 'all'
+        type: string
+
+jobs:
+  scrape-worker-1:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.worker == 'all' || github.event.inputs.worker == '1' }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scrape origins 1–13
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WORKER_ID: '1'
+        run: python daily_scraper.py incremental
+
+  scrape-worker-2:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.worker == 'all' || github.event.inputs.worker == '2' }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scrape origins 14–26
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WORKER_ID: '2'
+        run: python daily_scraper.py incremental
+
+  scrape-worker-3:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.worker == 'all' || github.event.inputs.worker == '3' }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scrape origins 27–38
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WORKER_ID: '3'
+        run: python daily_scraper.py incremental
+
+  scrape-worker-4:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.worker == 'all' || github.event.inputs.worker == '4' }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scrape origins 39–50
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WORKER_ID: '4'
+        run: python daily_scraper.py incremental
