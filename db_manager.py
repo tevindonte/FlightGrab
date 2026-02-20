@@ -50,12 +50,25 @@ class FlightDatabase:
                 num_stops SMALLINT,
                 is_best BOOLEAN DEFAULT FALSE,
                 google_flights_url TEXT,
+                booking_url TEXT,
+                google_booking_url TEXT,
                 first_seen DATE NOT NULL,
                 last_updated TIMESTAMP DEFAULT NOW(),
 
                 UNIQUE(origin, destination, departure_date)
             );
         """)
+        for col_name in ["booking_url", "google_booking_url"]:
+            try:
+                cursor.execute(
+                    "SELECT 1 FROM information_schema.columns "
+                    f"WHERE table_name='current_prices' AND column_name=%s",
+                    (col_name,),
+                )
+                if not cursor.fetchone():
+                    cursor.execute(f"ALTER TABLE current_prices ADD COLUMN {col_name} TEXT")
+            except Exception:
+                pass
         for col in ['origin', 'destination', 'route', 'price', 'departure_date', 'last_updated']:
             cursor.execute(f"CREATE INDEX IF NOT EXISTS idx_cp_{col} ON current_prices({col});")
 
@@ -91,8 +104,8 @@ class FlightDatabase:
             INSERT INTO current_prices
             (origin, destination, route, departure_date, price, currency, airline,
              departure_time, arrival_time, duration, num_stops, is_best,
-             google_flights_url, first_seen)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             google_flights_url, booking_url, google_booking_url, first_seen)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (origin, destination, departure_date)
             DO UPDATE SET
                 price = EXCLUDED.price,
@@ -103,6 +116,8 @@ class FlightDatabase:
                 num_stops = EXCLUDED.num_stops,
                 is_best = EXCLUDED.is_best,
                 google_flights_url = EXCLUDED.google_flights_url,
+                booking_url = COALESCE(EXCLUDED.booking_url, current_prices.booking_url),
+                google_booking_url = COALESCE(EXCLUDED.google_booking_url, current_prices.google_booking_url),
                 last_updated = NOW()
         """
 
@@ -122,7 +137,9 @@ class FlightDatabase:
                 f['price'], f.get('currency', 'USD'), f.get('airline') or None,
                 f.get('departure_time'), f.get('arrival_time'), f.get('duration'),
                 _num_stops(f.get('num_stops')), bool(f.get('is_best', False)),
-                f['google_flights_url'], f['first_seen']
+                f.get('google_flights_url'), f.get('booking_url'),
+                f.get('google_booking_url'),
+                f['first_seen']
             )
             for f in flights
         ]
@@ -190,7 +207,8 @@ class FlightDatabase:
         cursor.execute(f"""
             SELECT DISTINCT ON (destination)
                 destination, price, airline, departure_date,
-                departure_time, google_flights_url, duration, num_stops
+                departure_time, COALESCE(booking_url, google_booking_url, google_flights_url), duration, num_stops,
+                google_booking_url
             FROM current_prices
             WHERE origin = %s AND {cond} AND price > 0
             ORDER BY destination, price ASC
@@ -217,6 +235,7 @@ class FlightDatabase:
                     'booking_url': r[5],
                     'duration': r[6] if len(r) > 6 else None,
                     'num_stops': _num_stops(r[7]) if len(r) > 7 else 0,
+                    'google_booking_url': r[8] if len(r) > 8 else None,
                 }
                 for r in rows
             ],
@@ -242,7 +261,8 @@ class FlightDatabase:
         cursor.execute(f"""
             SELECT DISTINCT ON (destination)
                 origin, destination, price, airline, departure_date,
-                departure_time, google_flights_url, duration, num_stops
+                departure_time, COALESCE(booking_url, google_booking_url, google_flights_url), duration, num_stops,
+                google_booking_url
             FROM current_prices
             WHERE {cond} AND price > 0
             ORDER BY destination, price ASC
@@ -270,6 +290,7 @@ class FlightDatabase:
                     'booking_url': r[6],
                     'duration': r[7] if len(r) > 7 else None,
                     'num_stops': _num_stops(r[8]) if len(r) > 8 else 0,
+                    'google_booking_url': r[9] if len(r) > 9 else None,
                 }
                 for r in rows
             ],
@@ -288,6 +309,52 @@ class FlightDatabase:
         cursor.close()
         return [r[0] for r in rows]
 
+    def get_return_flights(self, origin: str, destination: str, outbound_date: str, min_days: int = 2, max_days: int = 30, limit: int = 20):
+        """
+        Get available return flights (reverse direction: destination -> origin).
+        For round-trip: outbound is A->B, return is B->A.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT origin, destination, price, airline, departure_date,
+                   departure_time, duration, num_stops,
+                   COALESCE(google_booking_url, booking_url) as booking_url,
+                   google_booking_url
+            FROM current_prices
+            WHERE origin = %s AND destination = %s
+            AND departure_date >= %s::date + %s
+            AND departure_date <= %s::date + %s
+            AND price > 0
+            ORDER BY price ASC, departure_date ASC
+            LIMIT %s
+        """, (destination, origin, outbound_date, min_days, outbound_date, max_days, limit))
+        rows = cursor.fetchall()
+        cursor.close()
+
+        def _num_stops(n):
+            if n is None:
+                return 0
+            try:
+                return int(n)
+            except (TypeError, ValueError):
+                return 0
+
+        return [
+            {
+                'origin': r[0],
+                'destination': r[1],
+                'price': float(r[2]),
+                'airline': r[3],
+                'departure_date': r[4].isoformat() if r[4] else None,
+                'departure_time': r[5],
+                'duration': r[6],
+                'num_stops': _num_stops(r[7]),
+                'booking_url': r[8],
+                'google_booking_url': r[9] if len(r) > 9 else None,
+            }
+            for r in rows
+        ]
+
     def search_route(self, origin, destination, time_filter='today'):
         """Get best price for a route in the given departure window."""
         cursor = self.conn.cursor()
@@ -303,7 +370,8 @@ class FlightDatabase:
         cursor.execute(f"""
             SELECT origin, destination, route, departure_date, price, currency, airline,
                    departure_time, arrival_time, duration, num_stops,
-                   google_flights_url
+                   COALESCE(booking_url, google_booking_url, google_flights_url),
+                   google_booking_url
             FROM current_prices
             WHERE origin = %s AND destination = %s AND {cond}
             ORDER BY price ASC
@@ -325,7 +393,8 @@ class FlightDatabase:
             'arrival_time': row[8],
             'duration': row[9],
             'num_stops': row[10],
-            'booking_url': row[11]
+            'booking_url': row[11],
+            'google_booking_url': row[12] if len(row) > 12 else None,
         }
 
     def close(self):

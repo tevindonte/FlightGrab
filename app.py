@@ -3,23 +3,30 @@ FlightGrab - Flight Deals Aggregator API
 """
 
 import os
+import urllib.parse
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
 from db_manager import FlightDatabase
-from flight_scraper import TOP_50_US_AIRPORTS
 
 load_dotenv()
+
+# Lazy load Playwright-based generator (heavy dependency)
+_booking_generator = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
-    # cleanup if needed
-    pass
+    try:
+        from booking_link_generator import close_generator
+        await close_generator()
+    except Exception:
+        pass
 
 
 app = FastAPI(
@@ -74,8 +81,10 @@ async def list_airports():
         if with_data:
             origins = db.get_origins_with_data()
             if not origins:
-                origins = TOP_50_US_AIRPORTS  # fallback
+                from flight_scraper import TOP_50_US_AIRPORTS
+                origins = TOP_50_US_AIRPORTS
         else:
+            from flight_scraper import TOP_50_US_AIRPORTS
             origins = TOP_50_US_AIRPORTS
         return {"airports": origins}
     finally:
@@ -95,6 +104,33 @@ async def get_all_deals(
         db.close()
 
 
+@app.get("/api/return-flights")
+async def get_return_flights(
+    origin: str = Query(..., min_length=3, max_length=3),
+    destination: str = Query(..., min_length=3, max_length=3),
+    outbound_date: str = Query(..., description="Outbound departure date YYYY-MM-DD"),
+    min_days: int = Query(2, ge=1, le=90),
+    max_days: int = Query(30, ge=1, le=90),
+):
+    """
+    Get available return flights (reverse direction) for round-trip planning.
+    E.g. outbound ATL→MIA, return MIA→ATL.
+    """
+    origin, destination = origin.upper(), destination.upper()
+    db = get_db()
+    try:
+        flights = db.get_return_flights(origin, destination, outbound_date, min_days, max_days)
+        return {
+            "origin": origin,
+            "destination": destination,
+            "outbound_date": outbound_date,
+            "flights": flights,
+            "count": len(flights),
+        }
+    finally:
+        db.close()
+
+
 @app.get("/api/deals")
 async def get_deals(
     origin: str = Query(..., min_length=3, max_length=3),
@@ -102,8 +138,6 @@ async def get_deals(
 ):
     """Get cheapest flights from an origin (by departure date: today, tomorrow, weekend, week, month, flexible)."""
     origin = origin.upper()
-    if origin not in TOP_50_US_AIRPORTS:
-        raise HTTPException(status_code=400, detail=f"Unknown airport: {origin}")
     db = get_db()
     try:
         results = db.get_cheapest_from_origin(origin, time_filter=period)
@@ -128,6 +162,61 @@ async def search_route(
         return result
     finally:
         db.close()
+
+
+@app.get("/api/book-redirect")
+async def book_redirect(
+    origin: str = Query(..., min_length=3, max_length=3),
+    destination: str = Query(..., min_length=3, max_length=3),
+    date: str = Query(..., description="Departure date YYYY-MM-DD"),
+):
+    """
+    Generate fresh OTA booking link by simulating Continue click on Google Flights.
+    User clicks card -> this endpoint -> Playwright clicks -> redirect to airline.
+    Falls back to Google Flights booking page if generation fails.
+    """
+    origin = origin.upper()
+    destination = destination.upper()
+
+    db = get_db()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT google_booking_url
+            FROM current_prices
+            WHERE origin = %s AND destination = %s AND departure_date = %s
+            ORDER BY price ASC
+            LIMIT 1
+            """,
+            (origin, destination, date),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        google_booking_url = row[0] if row and row[0] else None
+    finally:
+        db.close()
+
+    if not google_booking_url:
+        fallback = (
+            "https://www.google.com/travel/flights?q="
+            + urllib.parse.quote(f"Flights from {origin} to {destination} on {date}")
+        )
+        return RedirectResponse(url=fallback)
+
+    try:
+        from booking_link_generator import get_generator
+
+        generator = await get_generator()
+        fresh_link = await generator.get_fresh_booking_link(google_booking_url, timeout_ms=25000)
+        if fresh_link:
+            return RedirectResponse(url=fresh_link)
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+    return RedirectResponse(url=google_booking_url)
 
 
 @app.get("/api/health")

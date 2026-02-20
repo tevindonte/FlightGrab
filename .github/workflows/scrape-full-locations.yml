@@ -1,0 +1,171 @@
+# Full Location Scraper – GitHub Actions
+# Scrapes all country airports × popular destinations (paired A↔B) using Playwright.
+# 4 parallel workers, each gets ~1/4 of jobs. ~100 jobs/worker to fit 35 min timeout.
+# Schedule: 4 AM UTC daily (offset from fast_flights scraper at 3 AM)
+
+name: Full Location Scraper
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      worker:
+        description: 'Worker to run (1-4 or "all")'
+        required: false
+        default: 'all'
+        type: string
+
+env:
+  TOTAL_WORKERS: 4
+  MAX_JOBS_PER_RUN: 80
+  MAX_COUNTRIES: 150
+
+jobs:
+  scrape-full-1:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.worker == 'all' || github.event.inputs.worker == '1' }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r reverse_engineering_scraping/requirements.txt
+
+      - name: Install Playwright Chromium
+        run: playwright install chromium
+
+      - name: Scrape worker 1
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WORKER_ID: '1'
+          TOTAL_WORKERS: ${{ env.TOTAL_WORKERS }}
+          MAX_JOBS_PER_RUN: ${{ env.MAX_JOBS_PER_RUN }}
+          MAX_COUNTRIES: ${{ env.MAX_COUNTRIES }}
+        run: |
+          cd reverse_engineering_scraping
+          python scrape_and_save_pipeline.py \
+            --mode popular \
+            --max-countries $MAX_COUNTRIES \
+            --max-jobs-per-run $MAX_JOBS_PER_RUN \
+            --worker-id 1 \
+            --total-workers $TOTAL_WORKERS \
+            --concurrency 2
+
+  scrape-full-2:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.worker == 'all' || github.event.inputs.worker == '2' }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r reverse_engineering_scraping/requirements.txt
+
+      - name: Install Playwright Chromium
+        run: playwright install chromium
+
+      - name: Scrape worker 2
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WORKER_ID: '2'
+          TOTAL_WORKERS: ${{ env.TOTAL_WORKERS }}
+          MAX_JOBS_PER_RUN: ${{ env.MAX_JOBS_PER_RUN }}
+          MAX_COUNTRIES: ${{ env.MAX_COUNTRIES }}
+        run: |
+          cd reverse_engineering_scraping
+          python scrape_and_save_pipeline.py \
+            --mode popular \
+            --max-countries $MAX_COUNTRIES \
+            --max-jobs-per-run $MAX_JOBS_PER_RUN \
+            --worker-id 2 \
+            --total-workers $TOTAL_WORKERS \
+            --concurrency 2
+
+  scrape-full-3:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.worker == 'all' || github.event.inputs.worker == '3' }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r reverse_engineering_scraping/requirements.txt
+
+      - name: Install Playwright Chromium
+        run: playwright install chromium
+
+      - name: Scrape worker 3
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WORKER_ID: '3'
+          TOTAL_WORKERS: ${{ env.TOTAL_WORKERS }}
+          MAX_JOBS_PER_RUN: ${{ env.MAX_JOBS_PER_RUN }}
+          MAX_COUNTRIES: ${{ env.MAX_COUNTRIES }}
+        run: |
+          cd reverse_engineering_scraping
+          python scrape_and_save_pipeline.py \
+            --mode popular \
+            --max-countries $MAX_COUNTRIES \
+            --max-jobs-per-run $MAX_JOBS_PER_RUN \
+            --worker-id 3 \
+            --total-workers $TOTAL_WORKERS \
+            --concurrency 2
+
+  scrape-full-4:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.worker == 'all' || github.event.inputs.worker == '4' }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r reverse_engineering_scraping/requirements.txt
+
+      - name: Install Playwright Chromium
+        run: playwright install chromium
+
+      - name: Scrape worker 4
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WORKER_ID: '4'
+          TOTAL_WORKERS: ${{ env.TOTAL_WORKERS }}
+          MAX_JOBS_PER_RUN: ${{ env.MAX_JOBS_PER_RUN }}
+          MAX_COUNTRIES: ${{ env.MAX_COUNTRIES }}
+        run: |
+          cd reverse_engineering_scraping
+          python scrape_and_save_pipeline.py \
+            --mode popular \
+            --max-countries $MAX_COUNTRIES \
+            --max-jobs-per-run $MAX_JOBS_PER_RUN \
+            --worker-id 4 \
+            --total-workers $TOTAL_WORKERS \
+            --concurrency 2

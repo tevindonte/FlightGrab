@@ -33,6 +33,7 @@
 
   function getCityImage(airportCode) {
     if (!airportCode) return '/static/images/states/georgia.jpg';
+    if (CITY_IMAGES[airportCode]) return CITY_IMAGES[airportCode];
     return `/static/images/airports/${airportCode}.jpg`;
   }
 
@@ -41,57 +42,69 @@
     return `/static/images/states/${state}.jpg`;
   }
 
+  function getFallbackImage(airportCode) {
+    if (AIRPORT_TO_STATE[airportCode]) return getStateFallbackImage(airportCode);
+    if (AIRPORT_TO_COUNTRY[airportCode]) return `https://flagcdn.com/w320/${AIRPORT_TO_COUNTRY[airportCode]}.png`;
+    return '/static/images/states/georgia.jpg';
+  }
+
   const AIRPORT_CITIES = {
-    'ATL': 'Atlanta',
-    'DFW': 'Dallas',
-    'DEN': 'Denver',
-    'ORD': 'Chicago',
-    'LAX': 'Los Angeles',
-    'CLT': 'Charlotte',
-    'MCO': 'Orlando',
-    'LAS': 'Las Vegas',
-    'PHX': 'Phoenix',
-    'MIA': 'Miami',
-    'SEA': 'Seattle',
-    'IAH': 'Houston',
-    'EWR': 'Newark',
-    'SFO': 'San Francisco',
-    'BOS': 'Boston',
-    'MSP': 'Minneapolis',
-    'DTW': 'Detroit',
-    'FLL': 'Fort Lauderdale',
-    'JFK': 'New York',
-    'LGA': 'New York',
-    'PHL': 'Philadelphia',
-    'BWI': 'Baltimore',
-    'DCA': 'Washington',
-    'IAD': 'Washington',
-    'SAN': 'San Diego',
-    'SLC': 'Salt Lake City',
-    'TPA': 'Tampa',
-    'PDX': 'Portland',
-    'HNL': 'Honolulu',
-    'AUS': 'Austin',
-    'MDW': 'Chicago',
-    'BNA': 'Nashville',
-    'DAL': 'Dallas',
-    'RDU': 'Raleigh',
-    'STL': 'St. Louis',
-    'HOU': 'Houston',
-    'SJC': 'San Jose',
-    'MCI': 'Kansas City',
-    'OAK': 'Oakland',
-    'SAT': 'San Antonio',
-    'RSW': 'Fort Myers',
-    'IND': 'Indianapolis',
-    'CMH': 'Columbus',
-    'CVG': 'Cincinnati',
-    'PIT': 'Pittsburgh',
-    'SMF': 'Sacramento',
-    'CLE': 'Cleveland',
-    'MKE': 'Milwaukee',
-    'SNA': 'Santa Ana',
-    'ANC': 'Anchorage',
+    'ATL': 'Atlanta', 'DFW': 'Dallas', 'DEN': 'Denver', 'ORD': 'Chicago', 'LAX': 'Los Angeles',
+    'CLT': 'Charlotte', 'MCO': 'Orlando', 'LAS': 'Las Vegas', 'PHX': 'Phoenix', 'MIA': 'Miami',
+    'SEA': 'Seattle', 'IAH': 'Houston', 'EWR': 'Newark', 'SFO': 'San Francisco', 'BOS': 'Boston',
+    'MSP': 'Minneapolis', 'DTW': 'Detroit', 'FLL': 'Fort Lauderdale', 'JFK': 'New York', 'LGA': 'New York',
+    'PHL': 'Philadelphia', 'BWI': 'Baltimore', 'DCA': 'Washington', 'IAD': 'Washington', 'SAN': 'San Diego',
+    'SLC': 'Salt Lake City', 'TPA': 'Tampa', 'PDX': 'Portland', 'HNL': 'Honolulu', 'AUS': 'Austin',
+    'MDW': 'Chicago', 'BNA': 'Nashville', 'DAL': 'Dallas', 'RDU': 'Raleigh', 'STL': 'St. Louis',
+    'HOU': 'Houston', 'SJC': 'San Jose', 'MCI': 'Kansas City', 'OAK': 'Oakland', 'SAT': 'San Antonio',
+    'RSW': 'Fort Myers', 'IND': 'Indianapolis', 'CMH': 'Columbus', 'CVG': 'Cincinnati', 'PIT': 'Pittsburgh',
+    'SMF': 'Sacramento', 'CLE': 'Cleveland', 'MKE': 'Milwaukee', 'SNA': 'Santa Ana', 'ANC': 'Anchorage',
+    'DXB': 'Dubai', 'AUH': 'Abu Dhabi', 'DOH': 'Doha', 'SIN': 'Singapore', 'HKG': 'Hong Kong',
+    'NRT': 'Tokyo', 'HND': 'Tokyo', 'ICN': 'Seoul', 'BKK': 'Bangkok', 'KUL': 'Kuala Lumpur',
+    'LHR': 'London', 'CDG': 'Paris', 'FRA': 'Frankfurt', 'AMS': 'Amsterdam', 'BCN': 'Barcelona',
+    'MAD': 'Madrid', 'FCO': 'Rome', 'DUB': 'Dublin', 'EDI': 'Edinburgh', 'MEX': 'Mexico City',
+    'YYZ': 'Toronto', 'YVR': 'Vancouver', 'YUL': 'Montreal', 'SYD': 'Sydney', 'MEL': 'Melbourne',
+    'AKL': 'Auckland', 'JNB': 'Johannesburg', 'CPT': 'Cape Town', 'CAI': 'Cairo', 'TLV': 'Tel Aviv',
+    'DEL': 'Delhi', 'BOM': 'Mumbai', 'SJO': 'San Jose', 'PTY': 'Panama City',
+  };
+
+  const AIRPORT_TO_COUNTRY = {
+    'DXB': 'ae', 'AUH': 'ae', 'SHJ': 'ae', 'DOH': 'qa', 'BAH': 'bh', 'KBL': 'af',
+    'SIN': 'sg', 'HKG': 'hk', 'NRT': 'jp', 'HND': 'jp', 'ICN': 'kr', 'BKK': 'th',
+    'KUL': 'my', 'DEL': 'in', 'BOM': 'in', 'DAC': 'bd',
+    'LHR': 'gb', 'CDG': 'fr', 'FRA': 'de', 'AMS': 'nl', 'BCN': 'es', 'MAD': 'es',
+    'FCO': 'it', 'DUB': 'ie', 'EDI': 'gb', 'VIE': 'at', 'BRU': 'be', 'ZRH': 'ch',
+    'YYZ': 'ca', 'YVR': 'ca', 'YUL': 'ca', 'MEX': 'mx', 'GRU': 'br', 'EZE': 'ar',
+    'SYD': 'au', 'MEL': 'au', 'BNE': 'au', 'AKL': 'nz',
+    'JNB': 'za', 'CPT': 'za', 'CAI': 'eg', 'PTY': 'pa', 'SJO': 'cr', 'TLV': 'il',
+    'ATL': 'us', 'LAX': 'us', 'MIA': 'us', 'SFO': 'us', 'DEN': 'us', 'ORD': 'us'
+  };
+
+  const CITY_IMAGES = {
+    'DXB': 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=400&fit=crop',
+    'AUH': 'https://images.unsplash.com/photo-1518684079-3c830dcef090?w=400&fit=crop',
+    'DOH': 'https://images.unsplash.com/photo-1570701513264-e09c5d7ea2e5?w=400&fit=crop',
+    'SIN': 'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=400&fit=crop',
+    'HKG': 'https://images.unsplash.com/photo-1536599018102-9f803c140fc1?w=400&fit=crop',
+    'NRT': 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&fit=crop',
+    'HND': 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&fit=crop',
+    'ICN': 'https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=400&fit=crop',
+    'LHR': 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=400&fit=crop',
+    'CDG': 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400&fit=crop',
+    'FRA': 'https://images.unsplash.com/photo-1564981797816-1043664bf78d?w=400&fit=crop',
+    'AMS': 'https://images.unsplash.com/photo-1534351590666-13e3e96b5017?w=400&fit=crop',
+    'BCN': 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=400&fit=crop',
+    'MAD': 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?w=400&fit=crop',
+    'FCO': 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=400&fit=crop',
+    'DUB': 'https://images.unsplash.com/photo-1549918864-48ac978761a4?w=400&fit=crop',
+    'EDI': 'https://images.unsplash.com/photo-1603231639062-0eb8b1d210c4?w=400&fit=crop',
+    'YYZ': 'https://images.unsplash.com/photo-1517935706615-2717063c2225?w=400&fit=crop',
+    'YVR': 'https://images.unsplash.com/photo-1503919545889-aef636e10ad4?w=400&fit=crop',
+    'YUL': 'https://images.unsplash.com/photo-1497602172604-bfa09185fd5e?w=400&fit=crop',
+    'SYD': 'https://images.unsplash.com/photo-1549180030-48bf079a38b1?w=400&fit=crop',
+    'MEL': 'https://images.unsplash.com/photo-1545044846-351ba303b5b6?w=400&fit=crop',
+    'MEX': 'https://images.unsplash.com/photo-1518639192441-8fce0a366e8e?w=400&fit=crop',
+    'AKL': 'https://images.unsplash.com/photo-1507699629798-6870c2a0a90a?w=400&fit=crop',
   };
 
   let airports = [];
@@ -214,7 +227,7 @@
     let filtered = deals.filter(function (d) { return d.price && Number(d.price) > 0; });
     if (f.nonstop) filtered = filtered.filter(function (d) { return (d.num_stops || 0) === 0; });
     if (!isNaN(f.maxPrice) && f.maxPrice > 0) {
-      filtered = filtered.filter(function (d) { return (d.price || 0) * 2 <= f.maxPrice; });
+      filtered = filtered.filter(function (d) { return (d.price || 0) <= f.maxPrice; });
     }
 
     switch (f.sortBy) {
@@ -307,37 +320,57 @@
       const html = filtered.map(deal => {
         const cityName = getCityName(deal.destination);
         const code = deal.destination || '';
-        const roundTripPrice = (Number(deal.price) || 0) * 2;
+        const oneWayPrice = Number(deal.price) || 0;
         const duration = deal.duration || '—';
         const stops = formatStops(deal.num_stops != null ? deal.num_stops : 0);
         const dateStr = formatDate(deal.departure_date);
         const imgSrc = getCityImage(code);
-        const stateFallback = getStateFallbackImage(code);
-        const bookingUrl = deal.booking_url ? escapeAttr(deal.booking_url) : '#';
+        const imgFallback = getFallbackImage(code);
+        const origin = (deal.origin || currentOrigin || '').toUpperCase();
+        const dest = (deal.destination || '').toUpperCase();
+        const depDate = deal.departure_date || '';
+        const bookRedirectUrl = origin && dest && depDate
+          ? `${API}/api/book-redirect?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&date=${encodeURIComponent(depDate)}`
+          : '#';
+        const googleFlightsUrl = origin && dest && depDate
+          ? `https://www.google.com/travel/flights?q=${encodeURIComponent('Flights from ' + origin + ' to ' + dest + ' on ' + depDate)}`
+          : '#';
         const fallbackSvg = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27400%27%20height%3D%27300%27%3E%3Crect%20fill%3D%27%231a73e8%27%20width%3D%27400%27%20height%3D%27300%27%2F%3E%3C%2Fsvg%3E";
         const originBadge = mode === 'all' && deal.origin
           ? `<span class="origin-badge">from ${deal.origin}</span>`
           : '';
         const airline = deal.airline || 'Multiple airlines';
+        const dealJson = escapeAttr(JSON.stringify({
+          origin, destination: dest, departure_date: depDate, price: oneWayPrice,
+          airline, duration, num_stops: deal.num_stops,
+          google_booking_url: deal.google_booking_url || ''
+        }));
         return `
-        <a class="deal-card" href="${escapeAttr(bookingUrl)}" target="_blank" rel="noopener" data-destination="${code}">
-          <img class="card-image" src="${imgSrc}" alt="${cityName}" loading="lazy" data-fallback="${stateFallback}" data-final-fallback="${fallbackSvg}" onerror="if(this.dataset.tried){this.src=this.dataset.finalFallback}else{this.dataset.tried=1;this.src=this.dataset.fallback}">
-          <div class="preview-details">
-            <p>✈️ ${escapeHtml(airline)}</p>
-            <p>⏱️ ${duration}</p>
-            <p>📅 Departs ${dateStr}</p>
-            <span class="quick-book book-btn">Book Now →</span>
+        <div class="deal-card" data-destination="${code}">
+          <div class="deal-card-main">
+            <img class="card-image" src="${imgSrc}" alt="${cityName}" loading="lazy" data-fallback="${escapeAttr(imgFallback)}" data-final-fallback="${fallbackSvg}" onerror="if(this.dataset.tried){this.src=this.dataset.finalFallback}else{this.dataset.tried=1;this.src=this.dataset.fallback}">
+            <div class="preview-details">
+              <p>✈️ ${escapeHtml(airline)}</p>
+              <p>⏱️ ${duration}</p>
+              <p>📅 Departs ${dateStr}</p>
+              <span class="quick-book book-btn">Book Now →</span>
+            </div>
+            <div class="card-content">
+              ${originBadge}
+              <h3 class="city-name">${cityName}</h3>
+              <p class="airport-code">${deal.destination}</p>
+              <p class="flight-info">${duration}, ${stops}</p>
+              <p class="flight-dates">Departs ${dateStr}</p>
+              <p class="price">from $${Math.round(oneWayPrice)}</p>
+              <p class="price-note">one-way</p>
+              <div class="card-actions">
+                <a class="book-btn primary" href="${escapeAttr(bookRedirectUrl)}" target="_blank" rel="noopener" title="Book direct (~10 sec)">Book Now</a>
+                <a class="compare-link" href="${escapeAttr(googleFlightsUrl)}" target="_blank" rel="noopener">Compare on Google</a>
+                <button type="button" class="add-return-btn" data-deal="${dealJson}">+ Add return flight</button>
+              </div>
+            </div>
           </div>
-          <div class="card-content">
-            ${originBadge}
-            <h3 class="city-name">${cityName}</h3>
-            <p class="airport-code">${deal.destination}</p>
-            <p class="flight-info">${duration}, ${stops}</p>
-            <p class="flight-dates">Departs ${dateStr}</p>
-            <p class="price">from $${Math.round(roundTripPrice)}</p>
-            <p class="price-note">round-trip</p>
-          </div>
-        </a>
+        </div>
       `;
       }).join('');
       dealsGrid.innerHTML = html;
@@ -365,7 +398,7 @@
       if (deals.length === 0) {
         priceEl.textContent = '—';
       } else {
-        const cheapest = Math.min.apply(null, deals.map(function (d) { return (d.price || 0) * 2; }));
+        const cheapest = Math.min.apply(null, deals.map(function (d) { return (d.price || 0); }));
         priceEl.textContent = '$' + Math.round(cheapest);
       }
     }
@@ -540,6 +573,118 @@
     });
     searchInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') e.preventDefault();
+    });
+  }
+
+  let selectedOutbound = null;
+  let selectedReturn = null;
+  let returnFlightsData = null;
+
+  window.showReturnOptions = async function (deal) {
+    if (typeof deal === 'string') {
+      try { deal = JSON.parse(deal); } catch (e) { return; }
+    }
+    if (!deal || !deal.origin || !deal.destination || !deal.departure_date) return;
+
+    selectedOutbound = deal;
+    selectedReturn = null;
+    const modal = document.getElementById('return-modal');
+    const optionsEl = document.getElementById('return-options');
+    const totalEl = document.getElementById('modal-total-price');
+    const bookBothBtn = document.getElementById('book-both-btn');
+    const returnSelectedEl = document.getElementById('return-selected');
+    const returnPriceEl = document.getElementById('return-price');
+
+    document.getElementById('outbound-route').textContent = deal.origin + ' → ' + deal.destination;
+    document.getElementById('outbound-date').textContent = formatDate(deal.departure_date);
+    document.getElementById('outbound-price').textContent = '$' + Math.round(deal.price);
+    document.getElementById('return-route').textContent = deal.destination + ' → ' + deal.origin;
+    returnSelectedEl.textContent = 'Select a return flight below';
+    returnPriceEl.textContent = '—';
+    totalEl.textContent = '—';
+    bookBothBtn.disabled = true;
+    optionsEl.innerHTML = '<p class="loading-return">Loading return options...</p>';
+
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+
+    try {
+      const url = `${API}/api/return-flights?origin=${encodeURIComponent(deal.origin)}&destination=${encodeURIComponent(deal.destination)}&outbound_date=${encodeURIComponent(deal.departure_date)}&min_days=2&max_days=30`;
+      const res = await fetch(url);
+      const data = await res.json();
+      returnFlightsData = data;
+      if (!data.flights || data.flights.length === 0) {
+        optionsEl.innerHTML = '<p class="no-return-options">No return flights found for this route. Try different dates on Google Flights.</p>';
+        return;
+      }
+      optionsEl.innerHTML = data.flights.map(function (f) {
+        const fJson = escapeAttr(JSON.stringify(f));
+        return `<div class="return-option" data-flight="${fJson}">
+          <div class="option-date">${formatDate(f.departure_date)}</div>
+          <div class="option-details">${escapeHtml(f.airline || 'Multiple')} · ${f.duration || '—'} · ${formatStops(f.num_stops || 0)}</div>
+          <div class="option-price">$${Math.round(f.price)}</div>
+        </div>`;
+      }).join('');
+      optionsEl.querySelectorAll('.return-option').forEach(function (el) {
+        el.addEventListener('click', function () {
+          optionsEl.querySelectorAll('.return-option').forEach(function (o) { o.classList.remove('selected'); });
+          el.classList.add('selected');
+          try {
+            selectedReturn = JSON.parse(el.dataset.flight);
+            returnSelectedEl.textContent = formatDate(selectedReturn.departure_date);
+            returnPriceEl.textContent = '$' + Math.round(selectedReturn.price);
+            totalEl.textContent = '$' + Math.round(selectedOutbound.price + selectedReturn.price);
+            bookBothBtn.disabled = false;
+          } catch (e) {}
+        });
+      });
+    } catch (e) {
+      optionsEl.innerHTML = '<p class="no-return-options">Failed to load return flights. Please try again.</p>';
+    }
+  };
+
+  window.closeReturnModal = function () {
+    const modal = document.getElementById('return-modal');
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+  };
+
+  const modal = document.getElementById('return-modal');
+  if (modal) {
+    const backdrop = modal.querySelector('.modal-backdrop');
+    const closeBtn = modal.querySelector('.modal-close');
+    if (backdrop) backdrop.addEventListener('click', closeReturnModal);
+    if (closeBtn) closeBtn.addEventListener('click', closeReturnModal);
+    modal.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeReturnModal();
+    });
+  }
+
+  document.getElementById('book-both-btn')?.addEventListener('click', function () {
+    if (!selectedOutbound || !selectedReturn) return;
+    const outboundUrl = `${API}/api/book-redirect?origin=${encodeURIComponent(selectedOutbound.origin)}&destination=${encodeURIComponent(selectedOutbound.destination)}&date=${encodeURIComponent(selectedOutbound.departure_date)}`;
+    const returnUrl = `${API}/api/book-redirect?origin=${encodeURIComponent(selectedReturn.origin)}&destination=${encodeURIComponent(selectedReturn.destination)}&date=${encodeURIComponent(selectedReturn.departure_date)}`;
+    window.open(outboundUrl, '_blank');
+    setTimeout(function () { window.open(returnUrl, '_blank'); }, 500);
+    closeReturnModal();
+  });
+
+  document.getElementById('book-separate-btn')?.addEventListener('click', function () {
+    if (!selectedOutbound || !selectedReturn) return;
+    const outboundUrl = `${API}/api/book-redirect?origin=${encodeURIComponent(selectedOutbound.origin)}&destination=${encodeURIComponent(selectedOutbound.destination)}&date=${encodeURIComponent(selectedOutbound.departure_date)}`;
+    const returnUrl = `${API}/api/book-redirect?origin=${encodeURIComponent(selectedReturn.origin)}&destination=${encodeURIComponent(selectedReturn.destination)}&date=${encodeURIComponent(selectedReturn.departure_date)}`;
+    window.open(outboundUrl, '_blank');
+    setTimeout(function () { window.open(returnUrl, '_blank'); }, 500);
+    closeReturnModal();
+  });
+
+  if (dealsGrid) {
+    dealsGrid.addEventListener('click', function (e) {
+      const btn = e.target.closest('.add-return-btn');
+      if (btn) {
+        e.preventDefault();
+        showReturnOptions(btn.dataset.deal ? JSON.parse(btn.dataset.deal) : null);
+      }
     });
   }
 

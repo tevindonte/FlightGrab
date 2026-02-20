@@ -72,7 +72,7 @@
             </label>
             <label>
               Max price:
-              <input type="number" id="filter-max-price" placeholder="e.g. 200" min="0" aria-label="Maximum round-trip price">
+              <input type="number" id="filter-max-price" placeholder="e.g. 100" min="0" aria-label="Max one-way price">
             </label>
             <button type="button" class="clear-filters-btn hidden" id="clear-filters">Clear all filters</button>
           </div>
@@ -97,7 +97,7 @@
             </label>
             <label>
               Max price:
-              <input type="number" id="filter-max-price-mobile" placeholder="e.g. 200" min="0" aria-label="Maximum round-trip price">
+              <input type="number" id="filter-max-price-mobile" placeholder="e.g. 100" min="0" aria-label="Max one-way price">
             </label>
             <button type="button" class="clear-filters-btn hidden" id="clear-filters-mobile">Clear all filters</button>
           </div>
@@ -129,6 +129,41 @@
 
     <div id="deals-grid" class="deals-grid"></div>
   </main>
+
+  <div id="return-modal" class="modal hidden" role="dialog" aria-labelledby="return-modal-title" aria-modal="true" aria-hidden="true">
+    <div class="modal-backdrop" onclick="window.closeReturnModal && closeReturnModal()"></div>
+    <div class="modal-content">
+      <button type="button" class="modal-close" onclick="window.closeReturnModal && closeReturnModal()" aria-label="Close">&times;</button>
+      <h2 id="return-modal-title" class="modal-title">Complete Your Round Trip</h2>
+      <div class="trip-summary">
+        <div class="outbound-summary">
+          <h3>Outbound</h3>
+          <p id="outbound-route"></p>
+          <p id="outbound-date"></p>
+          <p class="price-large" id="outbound-price"></p>
+        </div>
+        <div class="trip-arrow">⇄</div>
+        <div class="return-summary">
+          <h3>Return</h3>
+          <p id="return-route"></p>
+          <p id="return-selected">Select a return flight below</p>
+          <p class="price-large" id="return-price"></p>
+        </div>
+      </div>
+      <div class="return-options-section">
+        <h3>Available Return Flights</h3>
+        <div id="return-options" class="return-options"></div>
+      </div>
+      <div class="modal-total">
+        <p class="total-label">Total Round Trip</p>
+        <p class="total-price" id="modal-total-price">—</p>
+        <div class="modal-actions">
+          <button type="button" class="btn-primary" id="book-both-btn" disabled>Book Both Flights</button>
+          <button type="button" class="btn-secondary" id="book-separate-btn">Book flights separately</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>

@@ -1,0 +1,32 @@
+---
+description: How to find or generate accurate location images (city, state, country)
+globs: **/city_image_sources.py, **/CITY_IMAGES*, **/fetch_city_images*
+alwaysApply: false
+---
+
+# Location Image Prompting
+
+When searching for or generating images to represent cities, states, or countries, use **landmark-specific searches** to avoid wrong or generic results.
+
+## The Unique Landmark Rule
+
+**Bad**: "Paris skyline" or "photo of Tokyo" → often returns generic/wrong results  
+**Better**: "Eiffel Tower from Trocadéro gardens" or "Tokyo Tower Shibuya Crossing"
+
+## Search Strategies
+
+1. **Use iconic landmark + city name**
+   - Dubai: `burj khalifa dubai`
+   - Singapore: `marina bay sands singapore`
+   - London: `big ben london parliament`
+
+2. **Pixabay** (recommended for this project)
+   - https://pixabay.com/images/search/{encoded_search}/
+   - Example: https://pixabay.com/images/search/burj%20khalifa%20dubai/
+
+3. **Worst case: use country flag**
+   - https://flagcdn.com/w320/{iso2}.png (e.g. `ae` for UAE)
+
+## Reference
+
+See `scripts/city_image_sources.py` for the LANDMARK_SEARCHES mapping used by the fetch script.
