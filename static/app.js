@@ -339,35 +339,26 @@
         const originBadge = mode === 'all' && deal.origin
           ? `<span class="origin-badge">from ${deal.origin}</span>`
           : '';
-        const airline = deal.airline || 'Multiple airlines';
         const dealJson = escapeAttr(JSON.stringify({
           origin, destination: dest, departure_date: depDate, price: oneWayPrice,
-          airline, duration, num_stops: deal.num_stops,
+          airline: deal.airline, duration, num_stops: deal.num_stops,
           google_booking_url: deal.google_booking_url || ''
         }));
         return `
         <div class="deal-card" data-destination="${code}">
-          <div class="deal-card-main">
-            <img class="card-image" src="${imgSrc}" alt="${cityName}" loading="lazy" data-fallback="${escapeAttr(imgFallback)}" data-final-fallback="${fallbackSvg}" onerror="if(this.dataset.tried){this.src=this.dataset.finalFallback}else{this.dataset.tried=1;this.src=this.dataset.fallback}">
-            <div class="preview-details">
-              <p>✈️ ${escapeHtml(airline)}</p>
-              <p>⏱️ ${duration}</p>
-              <p>📅 Departs ${dateStr}</p>
-              <span class="quick-book book-btn">Book Now →</span>
-            </div>
-            <div class="card-content">
-              ${originBadge}
-              <h3 class="city-name">${cityName}</h3>
-              <p class="airport-code">${deal.destination}</p>
-              <p class="flight-info">${duration}, ${stops}</p>
-              <p class="flight-dates">Departs ${dateStr}</p>
-              <p class="price">from $${Math.round(oneWayPrice)}</p>
-              <p class="price-note">one-way</p>
-              <div class="card-actions">
-                <a class="book-btn primary" href="${escapeAttr(bookRedirectUrl)}" target="_blank" rel="noopener" title="Book direct (~10 sec)">Book Now</a>
-                <a class="compare-link" href="${escapeAttr(googleFlightsUrl)}" target="_blank" rel="noopener">Compare on Google</a>
-                <button type="button" class="add-return-btn" data-deal="${dealJson}">+ Add return flight</button>
-              </div>
+          <img class="card-image" src="${imgSrc}" alt="${cityName}" loading="lazy" data-fallback="${escapeAttr(imgFallback)}" data-final-fallback="${fallbackSvg}" onerror="if(this.dataset.tried){this.src=this.dataset.finalFallback}else{this.dataset.tried=1;this.src=this.dataset.fallback}">
+          <div class="card-content">
+            ${originBadge}
+            <h3 class="city-name">${cityName}</h3>
+            <p class="airport-code">${deal.destination}</p>
+            <p class="flight-info">${duration}, ${stops}</p>
+            <p class="flight-dates">Departs ${dateStr}</p>
+            <p class="price">from $${Math.round(oneWayPrice)}</p>
+            <p class="price-note">one-way</p>
+            <div class="card-actions">
+              <a class="btn-primary" href="${escapeAttr(bookRedirectUrl)}" target="_blank" rel="noopener" title="Book direct (~10 sec)">Book Now →</a>
+              <a class="btn-secondary" href="${escapeAttr(googleFlightsUrl)}" target="_blank" rel="noopener">Compare on Google</a>
+              <button type="button" class="btn-return" data-deal="${dealJson}">+ Add return flight</button>
             </div>
           </div>
         </div>
@@ -680,7 +671,7 @@
 
   if (dealsGrid) {
     dealsGrid.addEventListener('click', function (e) {
-      const btn = e.target.closest('.add-return-btn');
+      const btn = e.target.closest('.btn-return');
       if (btn) {
         e.preventDefault();
         showReturnOptions(btn.dataset.deal ? JSON.parse(btn.dataset.deal) : null);
