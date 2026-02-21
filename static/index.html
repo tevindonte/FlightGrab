@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="icon" type="image/png" href="/static/images/logo.png">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <header class="header">
@@ -38,12 +39,34 @@
 
   <main class="container">
     <div class="origin-selector">
-      <label for="origin">Flying from:</label>
-      <select id="origin" aria-label="Origin airport">
-        <option value="">Loading...</option>
-      </select>
+      <label for="origin-input">Flying from:</label>
+      <div class="origin-combobox" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-owns="origin-listbox">
+        <input type="text" id="origin-input" autocomplete="off" aria-label="Origin airport" placeholder="Search or select...">
+        <input type="hidden" id="origin" name="origin" value="">
+        <button type="button" class="btn-location" id="btn-use-location" title="Use my location" aria-label="Use my location">📍</button>
+        <ul id="origin-listbox" class="origin-listbox" role="listbox" aria-label="Airport options"></ul>
+      </div>
     </div>
 
+    <div class="view-toggle-row">
+      <div class="view-toggle">
+        <button type="button" class="view-btn active" id="view-list" aria-pressed="true">📋 List</button>
+        <button type="button" class="view-btn" id="view-calendar" aria-pressed="false">📅 Calendar</button>
+      </div>
+    </div>
+    <div id="calendar-view-container" class="calendar-view-container hidden">
+      <p class="calendar-view-hint">Select your origin above, then pick a route below to see prices by date.</p>
+      <div class="calendar-view-header">
+        <label for="calendar-route-select">Route:</label>
+        <select id="calendar-route-select" aria-label="Select route for calendar">
+          <option value="">Select a route…</option>
+        </select>
+      </div>
+      <p id="calendar-route-hint" class="calendar-route-hint hidden">Load deals in List view first, then pick a route here.</p>
+      <div class="calendar-filters-note">Filters and sort apply to List view. Switch back to List to refine results.</div>
+      <div id="main-calendar-content" class="main-calendar-content"></div>
+    </div>
+    <div id="list-view-container">
     <div class="results-header">
       <h2 id="deals-heading" class="deals-heading">Cheapest Flights This Week</h2>
       <div class="stats" id="stats" aria-live="polite">
@@ -63,7 +86,18 @@
           <option value="week" selected>This Week</option>
           <option value="month">This Month</option>
           <option value="flexible">Flexible (cheapest in 30 days)</option>
+          <option value="date">Pick a specific date</option>
+          <option value="range">Date range</option>
         </select>
+        <label for="specific-date" class="specific-date-label hidden" id="specific-date-label">Date:</label>
+        <input type="date" id="specific-date" class="specific-date-input hidden" aria-label="Specific departure date" min="">
+        <div id="date-range-inputs" class="date-range-inputs hidden">
+          <label for="date-from">From:</label>
+          <input type="date" id="date-from" aria-label="Departure from date" min="">
+          <label for="date-to">To:</label>
+          <input type="date" id="date-to" aria-label="Departure to date" min="">
+          <button type="button" class="btn-save-dates" id="btn-save-dates" title="Save as my default dates">💾 Save</button>
+        </div>
       </div>
       <button type="button" class="mobile-filter-btn" id="mobile-filter-btn" aria-expanded="false" aria-controls="filter-drawer">
         Filters & Sort
@@ -143,6 +177,7 @@
     <div id="no-results" class="no-results hidden">No results match your search.</div>
 
     <div id="deals-grid" class="deals-grid"></div>
+    </div>
   </main>
 
   <div id="return-modal" class="modal hidden" role="dialog" aria-labelledby="return-modal-title" aria-modal="true" aria-hidden="true">
@@ -206,6 +241,36 @@
     </div>
   </div>
 
+  <div id="calendar-modal" class="modal hidden" role="dialog" aria-labelledby="calendar-modal-title">
+    <div class="modal-backdrop" onclick="window.closeCalendarModal && closeCalendarModal()"></div>
+    <div class="modal-content modal-calendar">
+      <button type="button" class="modal-close" onclick="window.closeCalendarModal && closeCalendarModal()" aria-label="Close">&times;</button>
+      <h2 id="calendar-modal-title" class="modal-title">Prices by date</h2>
+      <p class="modal-subtitle" id="calendar-route-label">ATL → MIA</p>
+      <div class="calendar-modal-tabs">
+        <button type="button" class="cal-tab active" data-tab="tiles">Tiles</button>
+        <button type="button" class="cal-tab" data-tab="grid">Month grid</button>
+        <button type="button" class="cal-tab" data-tab="graph">Graph</button>
+      </div>
+      <div class="calendar-date-range-row">
+        <label>From:</label>
+        <input type="date" id="modal-date-from" aria-label="From date">
+        <label>To:</label>
+        <input type="date" id="modal-date-to" aria-label="To date">
+        <button type="button" class="btn-apply-range" id="modal-apply-range">Apply</button>
+      </div>
+      <div id="calendar-grid" class="calendar-grid"></div>
+      <div id="calendar-graph-container" class="calendar-graph-container hidden">
+        <canvas id="calendar-price-chart"></canvas>
+      </div>
+      <div id="calendar-selected" class="calendar-selected hidden">
+        <p class="calendar-selected-date"></p>
+        <p class="calendar-selected-price"></p>
+        <a id="calendar-book-btn" class="btn-primary" href="#" target="_blank" rel="noopener">Book this flight →</a>
+      </div>
+    </div>
+  </div>
+
   <div id="alert-modal" class="modal hidden" role="dialog" aria-labelledby="alert-modal-title">
     <div class="modal-backdrop" onclick="window.closeAlertModal && closeAlertModal()"></div>
     <div class="modal-content modal-small">
@@ -230,6 +295,15 @@
       <p class="alert-note">📧 We'll email you when the price drops below your target.</p>
     </div>
   </div>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span class="footer-disclaimer">Bookings redirect to airline sites.</span>
+      <a href="/static/privacy.html">Privacy</a>
+      <a href="/static/terms.html">Terms</a>
+      <a href="/static/about.html">About</a>
+    </div>
+  </footer>
 
   <script src="/static/app.js"></script>
 </body>

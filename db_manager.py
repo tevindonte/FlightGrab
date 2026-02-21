@@ -115,6 +115,18 @@ class FlightDatabase:
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_user ON saved_flights(user_id);")
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_date_preferences (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR(255) NOT NULL UNIQUE,
+                date_from DATE,
+                date_to DATE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_date_prefs ON user_date_preferences(user_id);")
+
         self.conn.commit()
         cursor.close()
         print("✓ Tables created")
@@ -216,21 +228,49 @@ class FlightDatabase:
         cursor.close()
         print(f"✓ Cleaned up {deleted} departed flights")
 
-    def get_cheapest_from_origin(self, origin, time_filter='today'):
+    def get_cheapest_from_origin(self, origin, time_filter='today', client_date=None, specific_date=None, date_from=None, date_to=None):
         """
-        Get cheapest flights from an origin by departure date.
-        time_filter: 'today', 'weekend' (3 days), 'week' (7 days), 'month' (30 days)
+        Get cheapest flights from an origin. specific_date or date_from+date_to override time_filter.
         """
         cursor = self.conn.cursor()
-        date_conditions = {
-            'today': "departure_date = CURRENT_DATE",
-            'tomorrow': "departure_date = CURRENT_DATE + INTERVAL '1 day'",
-            'weekend': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '3 days'",
-            'week': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'",
-            'month': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'",
-            'flexible': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'"
-        }
-        cond = date_conditions.get(time_filter, date_conditions['today'])
+        base_date = "CURRENT_DATE"
+        if client_date and time_filter in ('today', 'tomorrow') and len(client_date) == 10:
+            try:
+                from datetime import datetime
+                datetime.strptime(client_date, "%Y-%m-%d")
+                base_date = f"'{client_date}'::date"
+            except ValueError:
+                pass
+        if specific_date and len(specific_date) == 10:
+            try:
+                from datetime import datetime
+                datetime.strptime(specific_date, "%Y-%m-%d")
+                cond = f"departure_date = '{specific_date}'::date"
+            except ValueError:
+                cond = f"departure_date = {base_date}"
+        elif date_from and date_to and len(date_from) == 10 and len(date_to) == 10:
+            try:
+                from datetime import datetime
+                datetime.strptime(date_from, "%Y-%m-%d")
+                datetime.strptime(date_to, "%Y-%m-%d")
+                cond = f"departure_date BETWEEN '{date_from}'::date AND '{date_to}'::date"
+            except ValueError:
+                date_conditions = {'today': f"departure_date = {base_date}", 'tomorrow': f"departure_date = {base_date} + INTERVAL '1 day'",
+                    'weekend': f"departure_date BETWEEN {base_date} AND {base_date} + INTERVAL '3 days'",
+                    'week': f"departure_date BETWEEN {base_date} AND {base_date} + INTERVAL '7 days'",
+                    'month': f"departure_date BETWEEN {base_date} AND {base_date} + INTERVAL '30 days'",
+                    'flexible': f"departure_date BETWEEN {base_date} AND {base_date} + INTERVAL '30 days'"}
+                cond = date_conditions.get(time_filter, date_conditions['today'])
+        else:
+            date_conditions = {
+                'today': f"departure_date = {base_date}",
+                'tomorrow': f"departure_date = {base_date} + INTERVAL '1 day'",
+                'weekend': f"departure_date BETWEEN {base_date} AND {base_date} + INTERVAL '3 days'",
+                'week': f"departure_date BETWEEN {base_date} AND {base_date} + INTERVAL '7 days'",
+                'month': f"departure_date BETWEEN {base_date} AND {base_date} + INTERVAL '30 days'",
+                'flexible': f"departure_date BETWEEN {base_date} AND {base_date} + INTERVAL '30 days'"
+            }
+            cond = date_conditions.get(time_filter, date_conditions['today'])
 
         cursor.execute(f"""
             SELECT DISTINCT ON (destination)
@@ -270,21 +310,45 @@ class FlightDatabase:
             key=lambda x: x['price']
         )[:50]
 
-    def get_cheapest_from_all_origins(self, time_filter='week'):
+    def get_cheapest_from_all_origins(self, time_filter='week', client_date=None, specific_date=None, date_from=None, date_to=None):
         """
         Get cheapest flight to each destination from ANY origin.
-        Used for homepage global deals view.
+        specific_date: single date. date_from+date_to: range. Otherwise use time_filter.
         """
         cursor = self.conn.cursor()
+        base_date = "CURRENT_DATE"
+        if client_date and time_filter in ('today', 'tomorrow') and len(client_date) == 10:
+            try:
+                from datetime import datetime
+                datetime.strptime(client_date, "%Y-%m-%d")
+                base_date = f"'{client_date}'::date"
+            except ValueError:
+                pass
         date_conditions = {
-            'today': "departure_date = CURRENT_DATE",
-            'tomorrow': "departure_date = CURRENT_DATE + INTERVAL '1 day'",
-            'weekend': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '3 days'",
-            'week': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'",
-            'month': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'",
-            'flexible': "departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'"
+            'today': f"departure_date = {base_date}",
+            'tomorrow': f"departure_date = {base_date} + INTERVAL '1 day'",
+            'weekend': f"departure_date BETWEEN {base_date} AND {base_date} + INTERVAL '3 days'",
+            'week': f"departure_date BETWEEN {base_date} AND {base_date} + INTERVAL '7 days'",
+            'month': f"departure_date BETWEEN {base_date} AND {base_date} + INTERVAL '30 days'",
+            'flexible': f"departure_date BETWEEN {base_date} AND {base_date} + INTERVAL '30 days'"
         }
-        cond = date_conditions.get(time_filter, date_conditions['week'])
+        if specific_date and len(specific_date) == 10:
+            try:
+                from datetime import datetime
+                datetime.strptime(specific_date, "%Y-%m-%d")
+                cond = f"departure_date = '{specific_date}'::date"
+            except ValueError:
+                cond = date_conditions.get(time_filter, date_conditions['week'])
+        elif date_from and date_to and len(date_from) == 10 and len(date_to) == 10:
+            try:
+                from datetime import datetime
+                datetime.strptime(date_from, "%Y-%m-%d")
+                datetime.strptime(date_to, "%Y-%m-%d")
+                cond = f"departure_date BETWEEN '{date_from}'::date AND '{date_to}'::date"
+            except ValueError:
+                cond = date_conditions.get(time_filter, date_conditions['week'])
+        else:
+            cond = date_conditions.get(time_filter, date_conditions['week'])
 
         cursor.execute(f"""
             SELECT DISTINCT ON (destination)
@@ -336,6 +400,68 @@ class FlightDatabase:
         rows = cursor.fetchall()
         cursor.close()
         return [r[0] for r in rows]
+
+    def get_price_calendar(
+        self, origin: str, destination: str,
+        days: int = 30,
+        date_from: str = None,
+        date_to: str = None,
+    ):
+        """
+        Get cheapest price per date for a route.
+        Use days, or date_from+date_to for a range.
+        Returns: list of {date, price, airline, duration, num_stops, google_booking_url}
+        """
+        cursor = self.conn.cursor()
+        if date_from and date_to:
+            try:
+                from datetime import datetime
+                datetime.strptime(date_from, "%Y-%m-%d")
+                datetime.strptime(date_to, "%Y-%m-%d")
+                date_cond = "departure_date BETWEEN %s::date AND %s::date"
+                params = (origin.upper(), destination.upper(), date_from, date_to)
+            except ValueError:
+                date_cond = "departure_date >= CURRENT_DATE AND departure_date <= CURRENT_DATE + %s"
+                params = (origin.upper(), destination.upper(), days)
+        else:
+            date_cond = "departure_date >= CURRENT_DATE AND departure_date <= CURRENT_DATE + %s"
+            params = (origin.upper(), destination.upper(), days)
+        cursor.execute(f"""
+            SELECT DISTINCT ON (departure_date)
+                departure_date,
+                price,
+                airline,
+                duration,
+                num_stops,
+                google_booking_url
+            FROM current_prices
+            WHERE origin = %s AND destination = %s
+            AND {date_cond}
+            AND price > 0
+            ORDER BY departure_date, price ASC
+        """, params)
+        rows = cursor.fetchall()
+        cursor.close()
+
+        def _num_stops(n):
+            if n is None:
+                return 0
+            try:
+                return int(n)
+            except (TypeError, ValueError):
+                return 0
+
+        return [
+            {
+                'date': r[0].isoformat() if r[0] else None,
+                'price': float(r[1]),
+                'airline': r[2],
+                'duration': r[3],
+                'num_stops': _num_stops(r[4]),
+                'google_booking_url': r[5],
+            }
+            for r in rows
+        ]
 
     def get_return_flights(self, origin: str, destination: str, outbound_date: str, min_days: int = 2, max_days: int = 30, limit: int = 20):
         """
@@ -592,6 +718,48 @@ class FlightDatabase:
         self.conn.commit()
         cursor.close()
         return deleted
+
+    def get_user_date_preferences(self, user_id: str):
+        """Get saved date range for user. Returns {date_from, date_to} or None."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT date_from, date_to FROM user_date_preferences WHERE user_id = %s",
+            (user_id,),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        if not row or (not row[0] and not row[1]):
+            return None
+        return {
+            "date_from": row[0].isoformat() if row[0] else None,
+            "date_to": row[1].isoformat() if row[1] else None,
+        }
+
+    def save_user_date_preferences(self, user_id: str, date_from: str, date_to: str) -> bool:
+        """Save preferred date range for user."""
+        if not date_from or not date_to or len(date_from) != 10 or len(date_to) != 10:
+            return False
+        try:
+            from datetime import datetime
+            datetime.strptime(date_from, "%Y-%m-%d")
+            datetime.strptime(date_to, "%Y-%m-%d")
+        except ValueError:
+            return False
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO user_date_preferences (user_id, date_from, date_to, updated_at)
+            VALUES (%s, %s::date, %s::date, NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+                date_from = EXCLUDED.date_from,
+                date_to = EXCLUDED.date_to,
+                updated_at = NOW()
+            """,
+            (user_id, date_from, date_to),
+        )
+        self.conn.commit()
+        cursor.close()
+        return True
 
     def close(self):
         if self.conn:

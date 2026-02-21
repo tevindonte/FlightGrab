@@ -42,6 +42,13 @@ _booking_generator = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        db = FlightDatabase()
+        db.connect()
+        db.create_tables()
+        db.close()
+    except Exception:
+        pass
     yield
     try:
         from booking_link_generator import close_generator
@@ -122,13 +129,41 @@ async def list_airports():
 
 @app.get("/api/deals/all")
 async def get_all_deals(
-    period: str = Query("week", pattern="^(today|tomorrow|weekend|week|month|flexible)$"),
+    period: str = Query("week", pattern="^(today|tomorrow|weekend|week|month|flexible|date|range)$"),
+    client_date: str = Query(None, description="User's local date YYYY-MM-DD for today/tomorrow"),
+    specific_date: str = Query(None, description="YYYY-MM-DD for single-date filter (use with period=date)"),
+    date_from: str = Query(None, description="YYYY-MM-DD range start (use with period=range)"),
+    date_to: str = Query(None, description="YYYY-MM-DD range end (use with period=range)"),
 ):
     """Get cheapest flights to each destination from ANY origin. Used for homepage global deals."""
     db = get_db()
     try:
-        results = db.get_cheapest_from_all_origins(time_filter=period)
+        results = db.get_cheapest_from_all_origins(
+            time_filter=period if period not in ("date", "range") else "week",
+            client_date=client_date,
+            specific_date=specific_date if period == "date" else None,
+            date_from=date_from if period == "range" else None,
+            date_to=date_to if period == "range" else None,
+        )
         return {"origin": "ALL", "period": period, "deals": results}
+    finally:
+        db.close()
+
+
+@app.get("/api/price-calendar")
+async def get_price_calendar(
+    origin: str = Query(..., min_length=3, max_length=3),
+    destination: str = Query(..., min_length=3, max_length=3),
+    days: int = Query(30, ge=7, le=60),
+    date_from: str = Query(None, description="YYYY-MM-DD range start (overrides days)"),
+    date_to: str = Query(None, description="YYYY-MM-DD range end"),
+):
+    """Get cheapest price per date for a route across the next N days or a date range."""
+    origin, destination = origin.upper(), destination.upper()
+    db = get_db()
+    try:
+        dates = db.get_price_calendar(origin, destination, days=days, date_from=date_from, date_to=date_to)
+        return {"origin": origin, "destination": destination, "days": days, "dates": dates}
     finally:
         db.close()
 
@@ -163,13 +198,24 @@ async def get_return_flights(
 @app.get("/api/deals")
 async def get_deals(
     origin: str = Query(..., min_length=3, max_length=3),
-    period: str = Query("week", pattern="^(today|tomorrow|weekend|week|month|flexible)$"),
+    period: str = Query("week", pattern="^(today|tomorrow|weekend|week|month|flexible|date|range)$"),
+    client_date: str = Query(None, description="User's local date YYYY-MM-DD for today/tomorrow"),
+    specific_date: str = Query(None, description="YYYY-MM-DD for single-date filter (use with period=date)"),
+    date_from: str = Query(None, description="YYYY-MM-DD range start (use with period=range)"),
+    date_to: str = Query(None, description="YYYY-MM-DD range end (use with period=range)"),
 ):
-    """Get cheapest flights from an origin (by departure date: today, tomorrow, weekend, week, month, flexible)."""
+    """Get cheapest flights from an origin."""
     origin = origin.upper()
     db = get_db()
     try:
-        results = db.get_cheapest_from_origin(origin, time_filter=period)
+        results = db.get_cheapest_from_origin(
+            origin,
+            time_filter=period if period not in ("date", "range") else "week",
+            client_date=client_date,
+            specific_date=specific_date if period == "date" else None,
+            date_from=date_from if period == "range" else None,
+            date_to=date_to if period == "range" else None,
+        )
         return {"origin": origin, "period": period, "deals": results}
     finally:
         db.close()
@@ -338,6 +384,45 @@ async def get_saved_flights(authorization: str = Header(None)):
     try:
         flights = db.get_user_saved_flights(user_id)
         return {"saved_flights": flights}
+    finally:
+        db.close()
+
+
+@app.get("/api/date-preferences")
+async def get_date_preferences(authorization: str = Header(None)):
+    """Get user's saved date range. Requires Clerk auth."""
+    user_id = _verify_clerk_token(authorization)
+    if not user_id:
+        return {"date_from": None, "date_to": None}
+    db = get_db()
+    try:
+        prefs = db.get_user_date_preferences(user_id)
+        return prefs or {"date_from": None, "date_to": None}
+    finally:
+        db.close()
+
+
+@app.post("/api/date-preferences")
+async def save_date_preferences(
+    body: dict = Body(...),
+    authorization: str = Header(None),
+):
+    """Save preferred date range. Requires Clerk auth."""
+    user_id = _verify_clerk_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    date_from = (body.get("date_from") or "").strip()[:10]
+    date_to = (body.get("date_to") or "").strip()[:10]
+    if not date_from or not date_to:
+        raise HTTPException(status_code=400, detail="date_from and date_to required (YYYY-MM-DD)")
+    if date_from > date_to:
+        raise HTTPException(status_code=400, detail="date_to must be on or after date_from")
+    db = get_db()
+    try:
+        ok = db.save_user_date_preferences(user_id, date_from, date_to)
+        if not ok:
+            raise HTTPException(status_code=400, detail="Invalid date format")
+        return {"status": "saved", "date_from": date_from, "date_to": date_to}
     finally:
         db.close()
 

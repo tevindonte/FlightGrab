@@ -41,6 +41,14 @@
         document.getElementById('user-menu').style.display = 'flex';
         document.getElementById('user-menu').classList.add('header-auth-visible');
         document.getElementById('sign-in-section').style.display = 'none';
+        Clerk.session.getToken().then(function (token) {
+          fetch((typeof API !== 'undefined' ? API : '') + '/api/date-preferences', { headers: { 'Authorization': 'Bearer ' + token } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (data && data.date_from && data.date_to) window.preferredDates = data;
+            })
+            .catch(function () {});
+        }).catch(function () {});
       } else {
         document.getElementById('sign-in-section').style.display = 'flex';
         document.getElementById('sign-in-section').classList.add('header-auth-visible');
@@ -54,6 +62,9 @@
 
   function runApp() {
     const originSelect = document.getElementById('origin');
+    const originInput = document.getElementById('origin-input');
+    const originListbox = document.getElementById('origin-listbox');
+    const originCombobox = document.querySelector('.origin-combobox');
     const searchInput = document.getElementById('search-input');
     const loadingEl = document.getElementById('loading');
     const errorEl = document.getElementById('error');
@@ -98,6 +109,27 @@
     return '/static/images/states/georgia.jpg';
   }
 
+  // Lat/lon for nearest-airport fallback (US origins from OpenFlights/OurAirports)
+  const AIRPORT_COORDS = {
+    'ATL': [33.6367, -84.428101], 'DFW': [32.896801, -97.038002], 'DEN': [39.860027, -104.673792],
+    'ORD': [41.9786, -87.9048], 'LAX': [33.942501, -118.407997], 'CLT': [35.214, -80.9431],
+    'MCO': [28.4294, -81.309], 'LAS': [36.083361, -115.151817], 'PHX': [33.435302, -112.005905],
+    'MIA': [25.796011, -80.289751], 'SEA': [47.447943, -122.310276], 'IAH': [29.9844, -95.3414],
+    'EWR': [40.6894, -74.170545], 'SFO': [37.619806, -122.374821], 'BOS': [42.36197, -71.0079],
+    'MSP': [44.880081, -93.221741], 'DTW': [42.21377, -83.353786], 'FLL': [26.072599, -80.152702],
+    'JFK': [40.639447, -73.779317], 'LGA': [40.777199, -73.872597], 'PHL': [39.871899, -75.241096],
+    'BWI': [39.1754, -76.668297], 'DCA': [38.8521, -77.037697], 'IAD': [38.9445, -77.455803],
+    'SAN': [32.733601, -117.19], 'SLC': [40.78886, -111.979866], 'TPA': [27.9755, -82.533203],
+    'PDX': [45.588699, -122.598], 'HNL': [21.318387, -157.92567], 'AUS': [30.197535, -97.662015],
+    'MDW': [41.786, -87.752403], 'BNA': [36.1245, -86.6782], 'DAL': [32.844776, -96.847653],
+    'RDU': [35.878659, -78.7873], 'STL': [38.748697, -90.37], 'HOU': [29.645336, -95.276812],
+    'SJC': [37.362452, -121.929188], 'MCI': [39.301699, -94.713893], 'OAK': [37.720085, -122.221184],
+    'SAT': [29.533701, -98.469803], 'RSW': [26.534685, -81.752816], 'IND': [39.7173, -86.294403],
+    'CMH': [39.998001, -82.891899], 'CVG': [39.048801, -84.667801], 'PIT': [40.491501, -80.232903],
+    'SMF': [38.6954, -121.591003], 'CLE': [41.411701, -81.8498], 'MKE': [42.947201, -87.896599],
+    'SNA': [33.675063, -117.869281], 'ANC': [61.179004, -149.992561]
+  };
+
   const AIRPORT_CITIES = {
     'ATL': 'Atlanta', 'DFW': 'Dallas', 'DEN': 'Denver', 'ORD': 'Chicago', 'LAX': 'Los Angeles',
     'CLT': 'Charlotte', 'MCO': 'Orlando', 'LAS': 'Las Vegas', 'PHX': 'Phoenix', 'MIA': 'Miami',
@@ -121,6 +153,17 @@
     'AKL': 'Auckland', 'BNE': 'Brisbane', 'GRU': 'São Paulo', 'EZE': 'Buenos Aires',
     'JNB': 'Johannesburg', 'CPT': 'Cape Town', 'CAI': 'Cairo', 'TLV': 'Tel Aviv',
     'DEL': 'Delhi', 'BOM': 'Mumbai', 'SJO': 'San Jose', 'PTY': 'Panama City',
+    'FAO': 'Faro', 'OPO': 'Porto', 'NAP': 'Naples', 'MXP': 'Milan',
+    'AGP': 'Málaga', 'PMI': 'Palma de Mallorca', 'SVQ': 'Seville',
+    'VLC': 'Valencia', 'BIO': 'Bilbao', 'SCL': 'Santiago', 'BOG': 'Bogotá',
+    'CUN': 'Cancún', 'GIG': 'Rio de Janeiro', 'COR': 'Córdoba',
+    'CNS': 'Cairns', 'PER': 'Perth', 'ADL': 'Adelaide', 'DUR': 'Durban',
+    'NBO': 'Nairobi', 'ADD': 'Addis Ababa',
+    'MNL': 'Manila', 'SGN': 'Ho Chi Minh City',
+    'GVA': 'Geneva', 'CRL': 'Charleroi', 'NCE': 'Nice', 'LYS': 'Lyon',
+    'HAM': 'Hamburg', 'STR': 'Stuttgart', 'DUS': 'Düsseldorf', 'CGN': 'Cologne',
+    'BHX': 'Birmingham', 'MAN': 'Manchester', 'LPL': 'Liverpool', 'NCL': 'Newcastle',
+    'NAS': 'Nassau', 'PUJ': 'Punta Cana', 'MBJ': 'Montego Bay', 'SXM': 'St. Maarten',
   };
 
   const AIRPORT_TO_COUNTRY = {
@@ -391,10 +434,11 @@
             <p class="price">from $${Math.round(oneWayPrice)}</p>
             <p class="price-note">one-way</p>
             <div class="card-actions">
-              <a class="btn-primary" href="${escapeAttr(bookRedirectUrl)}" target="_blank" rel="noopener" title="Book direct (~10 sec)">Book Now →</a>
+              <a class="btn-primary" href="${escapeAttr(bookRedirectUrl)}" target="_blank" rel="noopener" title="Books via our link when available; otherwise opens Google Flights">Book Now →</a>
               <a class="btn-secondary" href="${escapeAttr(googleFlightsUrl)}" target="_blank" rel="noopener">Compare on Google</a>
               <button type="button" class="btn-alert" data-alert="${escapeAttr(JSON.stringify({ origin, destination: dest, departure_date: depDate, price: oneWayPrice }))}" title="Get notified when price drops">🔔 Set Price Alert</button>
               <button type="button" class="btn-save-flight" data-save-origin="${escapeAttr(origin)}" data-save-dest="${escapeAttr(dest)}" title="Save this route">Save</button>
+              <button type="button" class="btn-calendar" data-cal-origin="${escapeAttr(origin)}" data-cal-dest="${escapeAttr(dest)}" title="See prices by date">📅 Prices by date</button>
               <button type="button" class="btn-return" data-deal="${dealJson}">+ Add return flight</button>
             </div>
           </div>
@@ -404,6 +448,7 @@
       dealsGrid.innerHTML = html;
       updateStats(filtered);
       updateFilterIndicators(filtered.length);
+      populateCalendarRouteSelect(filtered);
     } catch (err) {
       console.error('FlightGrab renderCards error:', err);
       dealsGrid.innerHTML = '<p class="error">Error displaying deals. Check console.</p>';
@@ -411,6 +456,25 @@
   }
 
   const dealsHeading = document.getElementById('deals-heading');
+
+  function populateCalendarRouteSelect(deals) {
+    const sel = document.getElementById('calendar-route-select');
+    const hint = document.getElementById('calendar-route-hint');
+    if (!sel) return;
+    const routes = {};
+    (deals || []).forEach(function (d) {
+      const o = (d.origin || currentOrigin || '').toUpperCase();
+      const dest = (d.destination || '').toUpperCase();
+      if (o && dest) routes[o + '|' + dest] = { origin: o, destination: dest };
+    });
+    const keys = Object.keys(routes).sort();
+    sel.innerHTML = '<option value="">Select a route…</option>' + keys.map(function (k) {
+      const r = routes[k];
+      const label = getCityName(r.origin) + ' (' + r.origin + ') → ' + getCityName(r.destination) + ' (' + r.destination + ')';
+      return '<option value="' + escapeAttr(k) + '">' + escapeHtml(label) + '</option>';
+    }).join('');
+    if (hint) hint.classList.toggle('hidden', keys.length > 0);
+  }
 
   function getPeriod() {
     const range = document.getElementById('date-range');
@@ -446,18 +510,39 @@
     weekend: 'This Weekend',
     week: 'This Week',
     month: 'This Month',
-    flexible: 'Flexible (30 days)'
+    flexible: 'Flexible (30 days)',
+    date: 'specific date',
+    range: 'date range'
   };
 
   function updateDealsHeading(mode, origin) {
     if (!dealsHeading) return;
-    const periodLabel = PERIOD_LABELS[getPeriod()] || 'This Week';
+    const period = getPeriod();
+    let periodLabel = PERIOD_LABELS[period] || 'This Week';
+    if (period === 'date') {
+      const specEl = document.getElementById('specific-date');
+      const d = specEl && specEl.value ? new Date(specEl.value + 'T12:00:00') : null;
+      periodLabel = d ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'specific date';
+    } else if (period === 'range') {
+      const fromEl = document.getElementById('date-from');
+      const toEl = document.getElementById('date-to');
+      if (fromEl && toEl && fromEl.value && toEl.value) {
+        const d1 = new Date(fromEl.value + 'T12:00:00');
+        const d2 = new Date(toEl.value + 'T12:00:00');
+        periodLabel = d1.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + d2.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+    }
     if (mode === 'all') {
       dealsHeading.textContent = 'Cheapest Flights ' + periodLabel + ' (From Any Airport)';
     } else {
       const cityName = getCityName(origin);
       dealsHeading.textContent = 'Cheapest Flights from ' + cityName + ' ' + periodLabel;
     }
+  }
+
+  function getClientDate() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
   async function fetchDeals(origin) {
@@ -469,18 +554,32 @@
     setError(null);
     try {
       const period = getPeriod();
+      const clientDate = getClientDate();
+      let dateParam = (period === 'today' || period === 'tomorrow') ? '&client_date=' + encodeURIComponent(clientDate) : '';
+      if (period === 'date') {
+        const specEl = document.getElementById('specific-date');
+        const specDate = specEl && specEl.value ? specEl.value : clientDate;
+        dateParam = '&specific_date=' + encodeURIComponent(specDate);
+      } else if (period === 'range') {
+        const fromEl = document.getElementById('date-from');
+        const toEl = document.getElementById('date-to');
+        const df = fromEl && fromEl.value ? fromEl.value : clientDate;
+        const dt = toEl && toEl.value ? toEl.value : clientDate;
+        dateParam = '&date_from=' + encodeURIComponent(df) + '&date_to=' + encodeURIComponent(dt);
+      }
+      const apiPeriod = (period === 'date' || period === 'range') ? period : period;
       let data;
       if (origin === 'ALL') {
         currentMode = 'all';
         currentOrigin = null;
-        const res = await fetch(`${API}/api/deals/all?period=${encodeURIComponent(period)}`);
+        const res = await fetch(`${API}/api/deals/all?period=${encodeURIComponent(apiPeriod)}${dateParam}`);
         if (!res.ok) throw new Error(res.statusText);
         data = await res.json();
         updateDealsHeading('all');
       } else {
         currentMode = 'specific';
         currentOrigin = origin;
-        const res = await fetch(`${API}/api/deals?origin=${encodeURIComponent(origin)}&period=${encodeURIComponent(period)}`);
+        const res = await fetch(`${API}/api/deals?origin=${encodeURIComponent(origin)}&period=${encodeURIComponent(apiPeriod)}${dateParam}`);
         if (!res.ok) throw new Error(res.statusText);
         data = await res.json();
         updateDealsHeading('specific', origin);
@@ -497,6 +596,181 @@
 
   const FALLBACK_ORIGINS = ['ATL', 'DFW', 'DEN', 'LAX', 'ORD'];
 
+  const ALL_AIRPORTS_OPTION = { value: 'ALL', label: 'All Airports (Cheapest Deals)' };
+
+  function buildOriginOptions() {
+    return [ALL_AIRPORTS_OPTION].concat(airports.map(function (code) {
+      return { value: code, label: getCityName(code) + ' (' + code + ')' };
+    }));
+  }
+
+  function renderOriginListbox(filter) {
+    const options = buildOriginOptions();
+    const q = (filter || '').toLowerCase().trim();
+    const filtered = q
+      ? options.filter(function (o) {
+          return o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q);
+        })
+      : options;
+    if (!originListbox) return;
+    originListbox.innerHTML = filtered.map(function (o) {
+      return '<li role="option" data-value="' + escapeAttr(o.value) + '">' + escapeHtml(o.label) + '</li>';
+    }).join('');
+    originListbox.classList.toggle('hidden', filtered.length === 0);
+    if (originCombobox) originCombobox.setAttribute('aria-expanded', filtered.length > 0);
+  }
+
+  function setOrigin(value, label) {
+    if (originSelect) originSelect.value = value;
+    if (originInput) originInput.value = label || (value === 'ALL' ? ALL_AIRPORTS_OPTION.label : getCityName(value) + ' (' + value + ')');
+    if (originListbox) { originListbox.classList.add('hidden'); originListbox.innerHTML = ''; }
+    if (originCombobox) originCombobox.setAttribute('aria-expanded', 'false');
+    fetchDeals(value);
+  }
+
+  const GEO_CACHE_KEY = 'fg_geocode';
+  const GEO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+  let lastNominatimCall = 0;
+  const NOMINATIM_MIN_INTERVAL_MS = 1100;
+
+  function getGeocodeCacheKey(lat, lon) {
+    const r = (n) => Math.round(n * 100) / 100;
+    return r(lat) + ',' + r(lon);
+  }
+
+  function getCachedPlace(lat, lon) {
+    try {
+      const raw = localStorage.getItem(GEO_CACHE_KEY);
+      if (!raw) return null;
+      const cache = JSON.parse(raw);
+      const key = getGeocodeCacheKey(lat, lon);
+      const entry = cache[key];
+      if (!entry || (Date.now() - entry.ts > GEO_CACHE_TTL_MS)) return null;
+      return entry.place;
+    } catch (_) { return null; }
+  }
+
+  function setCachedPlace(lat, lon, place) {
+    try {
+      const raw = localStorage.getItem(GEO_CACHE_KEY) || '{}';
+      const cache = JSON.parse(raw);
+      const key = getGeocodeCacheKey(lat, lon);
+      cache[key] = { place, ts: Date.now() };
+      const keys = Object.keys(cache);
+      if (keys.length > 200) {
+        const sorted = keys.sort((a, b) => cache[a].ts - cache[b].ts);
+        for (let i = 0; i < sorted.length - 100; i++) delete cache[sorted[i]];
+      }
+      localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(cache));
+    } catch (_) {}
+  }
+
+  async function reverseGeocode(lat, lon) {
+    const cached = getCachedPlace(lat, lon);
+    if (cached) return cached;
+
+    const delay = NOMINATIM_MIN_INTERVAL_MS - (Date.now() - lastNominatimCall);
+    if (delay > 0) await new Promise(function (r) { setTimeout(r, delay); });
+
+    const headers = { 'Accept': 'application/json' };
+    const ua = 'FlightGrab/1.0 (flight deal finder; fair use)';
+
+    try {
+      lastNominatimCall = Date.now();
+      const url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lon + '&zoom=8';
+      const res = await fetch(url, { headers: { ...headers, 'User-Agent': ua } });
+      if (!res.ok) throw new Error('Nominatim ' + res.status);
+      const data = await res.json();
+      const addr = data.address || {};
+      const place = (addr.city || addr.town || addr.village || addr.municipality || addr.county || addr.state || addr.region || '').toLowerCase();
+      if (place) setCachedPlace(lat, lon, place);
+      return place;
+    } catch (e) {
+      try {
+        const fallback = 'https://api.bigdatacloud.net/data/reverse-geocode?latitude=' + lat + '&longitude=' + lon;
+        const res2 = await fetch(fallback);
+        if (!res2.ok) throw new Error('Fallback ' + res2.status);
+        const data2 = await res2.json();
+        const city = (data2.city || data2.locality || data2.principalSubdivision || data2.localityInfo?.administrative?.[0]?.name || '').toLowerCase();
+        if (city) setCachedPlace(lat, lon, city);
+        return city;
+      } catch (_) {
+        return '';
+      }
+    }
+  }
+
+  function matchPlaceToAirport(place, allOpts) {
+    if (!place) return null;
+    for (let i = 0; i < allOpts.length; i++) {
+      const o = allOpts[i];
+      if (o.value === 'ALL') continue;
+      const cityName = getCityName(o.value).toLowerCase();
+      if (cityName.includes(place) || place.includes(cityName)) return o;
+    }
+    return null;
+  }
+
+  function findNearestAirport(lat, lon, allOpts) {
+    let best = null;
+    let bestDist = Infinity;
+    const toRad = function (d) { return d * Math.PI / 180; };
+    const haversine = function (lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+    for (let i = 0; i < allOpts.length; i++) {
+      const o = allOpts[i];
+      if (o.value === 'ALL') continue;
+      const c = AIRPORT_COORDS[o.value];
+      if (!c) continue;
+      const d = haversine(lat, lon, c[0], c[1]);
+      if (d < bestDist) { bestDist = d; best = o; }
+    }
+    return best;
+  }
+
+  async function useLocation() {
+    const btn = document.getElementById('btn-use-location');
+    if (btn) { btn.disabled = true; btn.classList.add('loading'); btn.title = 'Detecting...'; }
+    if (!navigator.geolocation) {
+      alert('Location not supported by your browser.');
+      if (btn) { btn.disabled = false; btn.classList.remove('loading'); btn.title = 'Use my location'; }
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async function (pos) {
+        try {
+          const place = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+          const allOpts = buildOriginOptions();
+          let found = matchPlaceToAirport(place, allOpts);
+          if (found) {
+            setOrigin(found.value, found.label);
+          } else {
+            found = findNearestAirport(pos.coords.latitude, pos.coords.longitude, allOpts);
+            if (found) {
+              const ok = confirm('Nearest airport: ' + found.label + '. Use this?');
+              if (ok) setOrigin(found.value, found.label);
+            } else {
+              alert('Could not find a matching airport for your location. Please select manually.');
+            }
+          }
+        } catch (e) {
+          alert('Could not detect location. Please select manually.');
+        }
+        if (btn) { btn.disabled = false; btn.classList.remove('loading'); btn.title = 'Use my location'; }
+      },
+      function () {
+        alert('Location denied. Please select an airport manually.');
+        if (btn) { btn.disabled = false; btn.classList.remove('loading'); btn.title = 'Use my location'; }
+      }
+    );
+  }
+
   async function loadAirports() {
     try {
       const res = await fetch(`${API}/api/airports?with_data=true`);
@@ -504,17 +778,12 @@
       airports = Array.isArray(data.airports) && data.airports.length > 0
         ? data.airports
         : FALLBACK_ORIGINS;
-      const allOption = '<option value="ALL">All Airports (Cheapest Deals)</option>';
-      originSelect.innerHTML = allOption +
-        airports.map(code => `<option value="${code}">${getCityName(code)} (${code})</option>`).join('');
-      originSelect.value = 'ALL';
-      fetchDeals('ALL');
+      setOrigin('ALL', ALL_AIRPORTS_OPTION.label);
+      renderOriginListbox();
     } catch (e) {
       airports = FALLBACK_ORIGINS;
-      originSelect.innerHTML = '<option value="ALL">All Airports (Cheapest Deals)</option>' +
-        airports.map(code => `<option value="${code}">${getCityName(code)} (${code})</option>`).join('');
-      originSelect.value = 'ALL';
-      fetchDeals('ALL');
+      setOrigin('ALL', ALL_AIRPORTS_OPTION.label);
+      renderOriginListbox();
     }
   }
 
@@ -523,16 +792,168 @@
     renderCards(allDeals, searchQ, currentMode);
   }
 
-  originSelect.addEventListener('change', function () {
-    fetchDeals(this.value);
+  if (originInput && originListbox) {
+    originInput.addEventListener('focus', function () { renderOriginListbox(originInput.value); });
+    originInput.addEventListener('input', function () { renderOriginListbox(originInput.value); });
+    originInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        originListbox.classList.add('hidden');
+        originInput.blur();
+      }
+    });
+    originListbox.addEventListener('click', function (e) {
+      const li = e.target.closest('li[data-value]');
+      if (li) setOrigin(li.dataset.value, li.textContent);
+    });
+  }
+  document.addEventListener('click', function (e) {
+    if (originCombobox && !originCombobox.contains(e.target)) {
+      if (originListbox) originListbox.classList.add('hidden');
+    }
+  });
+
+  document.getElementById('btn-use-location')?.addEventListener('click', function (e) {
+    e.preventDefault();
+    useLocation();
   });
 
   const dateRangeEl = document.getElementById('date-range');
+  const specificDateEl = document.getElementById('specific-date');
+  const specificDateLabel = document.getElementById('specific-date-label');
+  const dateRangeInputs = document.getElementById('date-range-inputs');
+  const dateFromEl = document.getElementById('date-from');
+  const dateToEl = document.getElementById('date-to');
+  function syncDateRangeVisibility() {
+    const today = getClientDate();
+    const period = dateRangeEl ? dateRangeEl.value : 'week';
+    const isDate = period === 'date';
+    const isRange = period === 'range';
+    if (specificDateLabel) specificDateLabel.classList.toggle('hidden', !isDate);
+    if (specificDateEl) specificDateEl.classList.toggle('hidden', !isDate);
+    if (dateRangeInputs) dateRangeInputs.classList.toggle('hidden', !isRange);
+    if (isDate && specificDateEl && !specificDateEl.value) {
+      specificDateEl.value = today;
+      specificDateEl.min = today;
+    }
+    if (isRange && dateFromEl && dateToEl) {
+      if (!dateFromEl.value) {
+        const prefs = window.preferredDates;
+        dateFromEl.value = (prefs && prefs.date_from) ? prefs.date_from : today;
+        dateFromEl.min = today;
+      }
+      if (!dateToEl.value) {
+        const prefs = window.preferredDates;
+        dateToEl.value = (prefs && prefs.date_to) ? prefs.date_to : today;
+        dateToEl.min = today;
+      }
+      if (dateFromEl.value) dateToEl.min = dateFromEl.value;
+      if (dateFromEl.value && dateToEl.value && dateToEl.value < dateFromEl.value) {
+        const t = dateFromEl.value;
+        dateFromEl.value = dateToEl.value;
+        dateToEl.value = t;
+      }
+    }
+    if (isDate || isRange) fetchDeals(originSelect ? originSelect.value : 'ALL');
+  }
   if (dateRangeEl) {
-    dateRangeEl.addEventListener('change', function () {
-      fetchDeals(originSelect.value);
+    dateRangeEl.addEventListener('change', syncDateRangeVisibility);
+  }
+  if (specificDateEl) {
+    specificDateEl.addEventListener('change', function () {
+      if (getPeriod() === 'date') fetchDeals(originSelect ? originSelect.value : 'ALL');
     });
   }
+  function validateDateRange() {
+    if (!dateFromEl || !dateToEl || !dateFromEl.value || !dateToEl.value) return true;
+    if (dateToEl.value < dateFromEl.value) {
+      const tmp = dateFromEl.value;
+      dateFromEl.value = dateToEl.value;
+      dateToEl.value = tmp;
+      dateToEl.min = dateFromEl.value;
+      return true;
+    }
+    return true;
+  }
+  if (dateFromEl) {
+    dateFromEl.addEventListener('change', function () {
+      if (dateToEl && dateFromEl.value) { dateToEl.min = dateFromEl.value; if (dateToEl.value && dateToEl.value < dateFromEl.value) dateToEl.value = dateFromEl.value; }
+      if (getPeriod() === 'range') { validateDateRange(); fetchDeals(originSelect ? originSelect.value : 'ALL'); }
+    });
+  }
+  if (dateToEl) {
+    dateToEl.addEventListener('change', function () {
+      if (getPeriod() === 'range') { validateDateRange(); fetchDeals(originSelect ? originSelect.value : 'ALL'); }
+    });
+  }
+  const listViewContainer = document.getElementById('list-view-container');
+  const calendarViewContainer = document.getElementById('calendar-view-container');
+  document.getElementById('view-list')?.addEventListener('click', function () {
+    if (listViewContainer) listViewContainer.classList.remove('hidden');
+    if (calendarViewContainer) calendarViewContainer.classList.add('hidden');
+    document.querySelectorAll('.view-btn').forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
+    const btn = document.getElementById('view-list');
+    if (btn) { btn.classList.add('active'); btn.setAttribute('aria-pressed', 'true'); }
+  });
+  document.getElementById('view-calendar')?.addEventListener('click', function () {
+    if (listViewContainer) listViewContainer.classList.add('hidden');
+    if (calendarViewContainer) calendarViewContainer.classList.remove('hidden');
+    document.querySelectorAll('.view-btn').forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
+    const btn = document.getElementById('view-calendar');
+    if (btn) { btn.classList.add('active'); btn.setAttribute('aria-pressed', 'true'); }
+  });
+  document.getElementById('calendar-route-select')?.addEventListener('change', function () {
+    const val = this.value;
+    if (!val) { document.getElementById('main-calendar-content').innerHTML = ''; return; }
+    const parts = val.split('|');
+    if (parts.length !== 2) return;
+    const origin = parts[0];
+    const destination = parts[1];
+    const content = document.getElementById('main-calendar-content');
+    content.innerHTML = '<p class="calendar-loading">Loading…</p>';
+    fetch(`${API}/api/price-calendar?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&days=30`)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        const dates = data.dates || [];
+        if (dates.length === 0) {
+          content.innerHTML = '<p class="calendar-empty">No price data for this route.</p>';
+          return;
+        }
+        calendarModalData = { origin, destination, dates, dateFrom: '', dateTo: '' };
+        const grid = document.createElement('div');
+        grid.className = 'calendar-grid';
+        content.innerHTML = '';
+        content.appendChild(grid);
+        renderCalendarGrid(dates, origin, destination, grid, null);
+      })
+      .catch(function () { content.innerHTML = '<p class="calendar-error">Failed to load.</p>'; });
+  });
+
+  document.getElementById('btn-save-dates')?.addEventListener('click', async function () {
+    const fromVal = dateFromEl && dateFromEl.value;
+    const toVal = dateToEl && dateToEl.value;
+    if (!fromVal || !toVal || !currentUser) {
+      if (!currentUser && Clerk) {
+        if (confirm('Sign in to save your preferred dates. Sign in now?')) Clerk.openSignIn();
+      } else {
+        alert('Select a date range first.');
+      }
+      return;
+    }
+    try {
+      const token = Clerk && Clerk.session ? await Clerk.session.getToken() : '';
+      const res = await fetch(`${API}/api/date-preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' },
+        body: JSON.stringify({ date_from: fromVal, date_to: toVal })
+      });
+      if (res.ok) {
+        window.preferredDates = { date_from: fromVal, date_to: toVal };
+        alert('Preferred dates saved!');
+      } else {
+        alert('Failed to save.');
+      }
+    } catch (e) { alert('Failed to save.'); }
+  });
 
   function onFilterChange(fromMobile) {
     if (fromMobile) syncFiltersToDesktop(); else syncFiltersToMobile();
@@ -728,7 +1149,251 @@
         const origin = saveBtn.dataset.saveOrigin;
         const dest = saveBtn.dataset.saveDest;
         if (origin && dest) saveFlightFromCard(origin, dest, saveBtn);
+        return;
       }
+      const calBtn = e.target.closest('.btn-calendar');
+      if (calBtn) {
+        e.preventDefault();
+        const origin = calBtn.dataset.calOrigin;
+        const dest = calBtn.dataset.calDest;
+        if (origin && dest) openCalendarModal(origin, dest);
+      }
+    });
+  }
+
+  let calendarModalData = { origin: '', destination: '', dates: [], dateFrom: '', dateTo: '' };
+  let calendarPriceChart = null;
+
+  function renderCalendarTiles(dates, origin, destination, grid, selectedEl) {
+    if (!dates.length) return;
+    const prices = dates.map(function (d) { return d.price; });
+    const minPrice = Math.min.apply(null, prices);
+    const maxPrice = Math.max.apply(null, prices);
+    const range = maxPrice - minPrice || 1;
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    let html = '<div class="calendar-tiles">';
+    dates.forEach(function (d) {
+      const pct = range > 0 ? (d.price - minPrice) / range : 0;
+      let priceClass = 'fair';
+      if (d.price <= minPrice + range * 0.2) priceClass = 'cheapest';
+      else if (pct < 0.5) priceClass = 'good-deal';
+      else if (pct >= 0.8) priceClass = 'expensive';
+      const dateObj = new Date(d.date + 'T12:00:00');
+      const weekday = dayNames[dateObj.getDay()];
+      const shortDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const bookUrl = `${API}/api/book-redirect?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(d.date)}`;
+      html += '<div class="calendar-tile has-price ' + priceClass + '" data-date="' + escapeAttr(d.date) + '" data-price="' + d.price + '" data-book="' + escapeAttr(bookUrl) + '">';
+      html += '<span class="cal-day">' + weekday + ', ' + shortDate + '</span><span class="cal-price">$' + Math.round(d.price) + '</span></div>';
+    });
+    html += '</div>';
+    grid.innerHTML = html;
+    bindCalendarCellClicks(grid, selectedEl, 'calendar-tile');
+  }
+
+  function renderCalendarGrid(dates, origin, destination, grid, selectedEl) {
+    if (!dates.length) return;
+    const byDate = {};
+    dates.forEach(function (d) { byDate[d.date] = d; });
+    const prices = dates.map(function (d) { return d.price; });
+    const minPrice = Math.min.apply(null, prices);
+    const maxPrice = Math.max.apply(null, prices);
+    const range = maxPrice - minPrice || 1;
+    const first = new Date(dates[0].date);
+    const last = new Date(dates[dates.length - 1].date);
+    const start = new Date(first.getFullYear(), first.getMonth(), 1);
+    const end = new Date(last.getFullYear(), last.getMonth() + 1, 0);
+    const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    let html = '<div class="calendar-month-grid"><div class="cal-grid-headers">' + dayHeaders.map(function (h) { return '<span>' + h + '</span>'; }).join('') + '</div><div class="cal-grid-cells">';
+    for (let i = 0; i < start.getDay(); i++) html += '<div class="cal-grid-cell empty"></div>';
+    const cur = new Date(start);
+    while (cur <= end) {
+      const dateStr = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0') + '-' + String(cur.getDate()).padStart(2, '0');
+      const info = byDate[dateStr];
+      if (info) {
+        const pct = range > 0 ? (info.price - minPrice) / range : 0;
+        let priceClass = 'fair';
+        if (info.price <= minPrice + range * 0.2) priceClass = 'cheapest';
+        else if (pct < 0.5) priceClass = 'good-deal';
+        else if (pct >= 0.8) priceClass = 'expensive';
+        const bookUrl = `${API}/api/book-redirect?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(dateStr)}`;
+        html += '<div class="cal-grid-cell has-price ' + priceClass + '" data-date="' + escapeAttr(dateStr) + '" data-price="' + info.price + '" data-book="' + escapeAttr(bookUrl) + '"><span class="cal-num">' + cur.getDate() + '</span><span class="cal-val">$' + Math.round(info.price) + '</span></div>';
+      } else {
+        html += '<div class="cal-grid-cell no-data"><span class="cal-num">' + cur.getDate() + '</span></div>';
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    html += '</div></div>';
+    grid.innerHTML = html;
+    bindCalendarCellClicks(grid, selectedEl, 'cal-grid-cell.has-price');
+  }
+
+  function bindCalendarCellClicks(container, selectedEl, selector) {
+    container.querySelectorAll(selector).forEach(function (cell) {
+      cell.addEventListener('click', function () {
+        const book = cell.dataset.book;
+        if (!book) return;
+        if (selectedEl) {
+          const dateStr = cell.dataset.date;
+          const price = cell.dataset.price;
+          const dateObj = new Date(dateStr + 'T12:00:00');
+          const label = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+          selectedEl.querySelector('.calendar-selected-date').textContent = label;
+          selectedEl.querySelector('.calendar-selected-price').textContent = 'from $' + Math.round(parseFloat(price));
+          const bookBtn = document.getElementById('calendar-book-btn');
+          if (bookBtn) { bookBtn.href = book; bookBtn.textContent = 'Book this flight →'; }
+          selectedEl.classList.remove('hidden');
+        } else {
+          window.open(book, '_blank');
+        }
+      });
+    });
+  }
+
+  function renderCalendarGraph(dates, graphContainer) {
+    if (!dates.length) return;
+    if (!window.Chart) {
+      if (graphContainer) graphContainer.innerHTML = '<p class="calendar-error">Graph requires Chart.js. Please refresh the page.</p>';
+      return;
+    }
+    if (calendarPriceChart) { calendarPriceChart.destroy(); calendarPriceChart = null; }
+    const ctx = document.getElementById('calendar-price-chart');
+    if (!ctx) return;
+    const sorted = dates.slice().sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
+    calendarPriceChart = new Chart(ctx.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: sorted.map(function (d) {
+          const x = new Date(d.date + 'T12:00:00');
+          return x.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }),
+        datasets: [{
+          label: 'Price',
+          data: sorted.map(function (d) { return d.price; }),
+          borderColor: '#1a73e8',
+          backgroundColor: 'rgba(26, 115, 232, 0.1)',
+          tension: 0.3,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: false }
+        }
+      }
+    });
+  }
+
+  async function openCalendarModal(origin, destination) {
+    const modal = document.getElementById('calendar-modal');
+    const routeLabel = document.getElementById('calendar-route-label');
+    const grid = document.getElementById('calendar-grid');
+    const graphContainer = document.getElementById('calendar-graph-container');
+    const selectedEl = document.getElementById('calendar-selected');
+    const modalDateFrom = document.getElementById('modal-date-from');
+    const modalDateTo = document.getElementById('modal-date-to');
+    if (!modal || !routeLabel || !grid) return;
+    routeLabel.textContent = origin + ' → ' + destination;
+    calendarModalData = { origin, destination, dates: [], dateFrom: '', dateTo: '' };
+    grid.innerHTML = '<p class="calendar-loading">Loading…</p>';
+    selectedEl.classList.add('hidden');
+    graphContainer.classList.add('hidden');
+    modal.classList.remove('hidden');
+    const today = getClientDate();
+    const toDefault = new Date();
+    toDefault.setDate(toDefault.getDate() + 30);
+    const toStr = toDefault.getFullYear() + '-' + String(toDefault.getMonth() + 1).padStart(2, '0') + '-' + String(toDefault.getDate()).padStart(2, '0');
+    if (modalDateFrom) { modalDateFrom.value = today; modalDateFrom.min = today; }
+    if (modalDateTo) { modalDateTo.value = toStr; modalDateTo.min = today; }
+    try {
+      let url = `${API}/api/price-calendar?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&days=30`;
+      const res = await fetch(url);
+      const data = await res.json();
+      let dates = data.dates || [];
+      if (dates.length === 0) {
+        grid.innerHTML = '<p class="calendar-empty">No price data for this route in the next 30 days.</p>';
+        return;
+      }
+      calendarModalData.dates = dates;
+      const activeTab = (modal.querySelector('.cal-tab.active') || {}).dataset?.tab || 'tiles';
+      if (activeTab === 'tiles') renderCalendarTiles(dates, origin, destination, grid, selectedEl);
+      else if (activeTab === 'grid') renderCalendarGrid(dates, origin, destination, grid, selectedEl);
+      else if (activeTab === 'graph') {
+        grid.classList.add('hidden');
+        graphContainer.classList.remove('hidden');
+        graphContainer.style.height = '280px';
+        renderCalendarGraph(dates, graphContainer);
+      }
+    } catch (err) {
+      grid.innerHTML = '<p class="calendar-error">Failed to load prices. Please try again.</p>';
+    }
+  }
+
+  document.querySelectorAll('.calendar-modal-tabs .cal-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      document.querySelectorAll('.cal-tab').forEach(function (t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+      const grid = document.getElementById('calendar-grid');
+      const graphContainer = document.getElementById('calendar-graph-container');
+      const d = calendarModalData;
+      if (!d.dates.length) return;
+      grid.classList.remove('hidden');
+      graphContainer.classList.add('hidden');
+      if (tab.dataset.tab === 'tiles') {
+        renderCalendarTiles(d.dates, d.origin, d.destination, grid, document.getElementById('calendar-selected'));
+      } else if (tab.dataset.tab === 'grid') {
+        renderCalendarGrid(d.dates, d.origin, d.destination, grid, document.getElementById('calendar-selected'));
+      } else if (tab.dataset.tab === 'graph') {
+        grid.classList.add('hidden');
+        graphContainer.classList.remove('hidden');
+        graphContainer.style.height = '280px';
+        renderCalendarGraph(d.dates, graphContainer);
+      }
+    });
+  });
+  document.getElementById('modal-apply-range')?.addEventListener('click', function () {
+    const fromEl = document.getElementById('modal-date-from');
+    const toEl = document.getElementById('modal-date-to');
+    if (!fromEl || !toEl || !fromEl.value || !toEl.value) return;
+    const d = calendarModalData;
+    if (!d.origin || !d.destination) return;
+    document.getElementById('calendar-grid').innerHTML = '<p class="calendar-loading">Loading…</p>';
+    fetch(`${API}/api/price-calendar?origin=${encodeURIComponent(d.origin)}&destination=${encodeURIComponent(d.destination)}&date_from=${encodeURIComponent(fromEl.value)}&date_to=${encodeURIComponent(toEl.value)}`)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        const dates = data.dates || [];
+        calendarModalData.dates = dates;
+        const tab = document.querySelector('.cal-tab.active');
+        const grid = document.getElementById('calendar-grid');
+        const graphContainer = document.getElementById('calendar-graph-container');
+        if (dates.length === 0) {
+          grid.innerHTML = '<p class="calendar-empty">No price data for this date range.</p>';
+        } else if (tab && tab.dataset.tab === 'graph') {
+          grid.classList.add('hidden');
+          graphContainer.classList.remove('hidden');
+          renderCalendarGraph(dates, graphContainer);
+        } else if (tab && tab.dataset.tab === 'grid') {
+          renderCalendarGrid(dates, d.origin, d.destination, grid, document.getElementById('calendar-selected'));
+        } else {
+          renderCalendarTiles(dates, d.origin, d.destination, grid, document.getElementById('calendar-selected'));
+        }
+      })
+      .catch(function () { document.getElementById('calendar-grid').innerHTML = '<p class="calendar-error">Failed to load.</p>'; });
+  });
+
+  window.closeCalendarModal = function () {
+    if (calendarPriceChart) { calendarPriceChart.destroy(); calendarPriceChart = null; }
+    document.getElementById('calendar-modal')?.classList.add('hidden');
+  };
+
+  const calendarModal = document.getElementById('calendar-modal');
+  if (calendarModal) {
+    calendarModal.querySelector('.modal-backdrop')?.addEventListener('click', closeCalendarModal);
+    calendarModal.querySelector('.modal-close')?.addEventListener('click', closeCalendarModal);
+    calendarModal.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeCalendarModal();
     });
   }
 
@@ -1027,12 +1692,19 @@
     }
     try {
       let token = '';
-      if (Clerk && Clerk.session) token = await Clerk.session.getToken();
+      if (Clerk && Clerk.session) {
+        token = await Clerk.session.getToken({ skipCache: true });
+      }
+      if (!token) {
+        if (Clerk) Clerk.openSignIn();
+        else alert('Please sign in to save flights.');
+        return;
+      }
       const res = await fetch(`${API}/api/saved-flights`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': token ? 'Bearer ' + token : ''
+          'Authorization': 'Bearer ' + token
         },
         body: JSON.stringify({ origin, destination })
       });
@@ -1043,11 +1715,15 @@
           btnEl.classList.add('saved');
           btnEl.disabled = true;
         }
+      } else if (res.status === 401) {
+        if (Clerk) Clerk.openSignIn();
+        else alert('Session expired. Please sign in again.');
       } else {
         alert(data.error || data.detail || 'Failed to save.');
       }
     } catch (e) {
-      alert('Failed to save flight.');
+      console.error('Save flight error:', e);
+      alert('Failed to save flight. Please try again.');
     }
   }
 

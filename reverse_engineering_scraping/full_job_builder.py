@@ -35,6 +35,7 @@ DEFAULT_EXPLORE_DESTINATIONS = [
     "Istanbul", "Thailand", "Portugal", "Greece",
     "London", "Mexico City", "Costa Rica", "Miami", "San Francisco",
     "Las Vegas", "Cancun", "Punta Cana", "Bahamas", "Jamaica",
+    "Fort Lauderdale",
 ]
 
 # High-value routes to prioritize (scraped first when in job set)

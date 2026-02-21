@@ -22,7 +22,9 @@ git push -u origin main
    - **flightgrab-baseline** (cron)
    - **flightgrab-incremental** (cron)
 
-## 3. Set DATABASE_URL
+## 3. Environment variables
+
+### Required for all services
 
 You must set `DATABASE_URL` for all three services (or use an [Environment Group](https://render.com/docs/configure-environment-variables#environment-groups) to share it).
 
@@ -31,6 +33,22 @@ You must set `DATABASE_URL` for all three services (or use an [Environment Group
   ```
   postgresql://user:password@host/dbname?sslmode=require
   ```
+
+### Full env vars for web service (flightgrab)
+
+For full functionality (auth, email alerts, correct links), add these to the **flightgrab** web service:
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | Neon PostgreSQL connection string |
+| `CLERK_PUBLISHABLE_KEY` | Clerk auth (frontend) |
+| `CLERK_SECRET_KEY` | Clerk auth (backend) |
+| `CLERK_JWKS_URL` | Clerk JWKS endpoint, e.g. `https://your-app.clerk.accounts.dev/.well-known/jwks.json` |
+| `APP_URL` | Public URL of your app, e.g. `https://flightgrab.cc` (used in email links) |
+| `ZOHO_FROM_EMAIL` | Sender for alert emails, e.g. `noreply@flightgrab.cc` |
+| `ZOHO_SMTP_PASSWORD` | Zoho SMTP password (for sending alerts) |
+
+The cron jobs (flightgrab-baseline, flightgrab-incremental) only need `DATABASE_URL`.
 
 **Optional – Environment Group (recommended):**
 
