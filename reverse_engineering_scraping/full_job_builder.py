@@ -33,6 +33,15 @@ DEFAULT_EXPLORE_DESTINATIONS = [
     "Sydney", "Dublin", "Paris", "Toronto", "Lisbon", "Dubai", "Tokyo",
     "Berlin", "Malta", "Barcelona", "Amsterdam", "Rome", "Madrid",
     "Istanbul", "Thailand", "Portugal", "Greece",
+    "London", "Mexico City", "Costa Rica", "Miami", "San Francisco",
+    "Las Vegas", "Cancun", "Punta Cana", "Bahamas", "Jamaica",
+]
+
+# High-value routes to prioritize (scraped first when in job set)
+PRIORITY_ROUTES = [
+    ("JFK", "LHR"), ("LAX", "NRT"), ("SFO", "HKG"), ("MIA", "LHR"),
+    ("JFK", "CDG"), ("LAX", "LHR"), ("ORD", "LHR"), ("SFO", "NRT"),
+    ("ATL", "LHR"), ("DFW", "LHR"), ("JFK", "FCO"), ("LAX", "SYD"),
 ]
 
 
@@ -164,7 +173,7 @@ def build_full_jobs(
     depart_date: Optional[str] = None,
     top_origins_per_country: int = 3,
     max_countries: Optional[int] = None,
-    max_popular_destinations: int = 25,
+    max_popular_destinations: int = 40,
     explore_destinations: Optional[List[str]] = None,
     country_top_path: Optional[str] = None,
     ranked_path: Optional[str] = None,
@@ -240,5 +249,33 @@ def build_full_jobs(
         depart_date=depart_date,
         ensure_both_directions=True,
     )
+
+    # Prepend priority routes (ensure high-value pairs get scraped first)
+    origin_set = set(origin_airports)
+    dest_set = set(dest_airports)
+    seen = {(j["origin"], j["dest"]) for j in jobs}
+    priority_jobs = []
+    for o, d in PRIORITY_ROUTES:
+        if o in origin_set and d in dest_set and (o, d) not in seen:
+            try:
+                url = build_flights_url_from_iata(
+                    slices_iata=[(depart_date, o, d)],
+                    trip_type="one_way",
+                    cabin="economy",
+                    adults=1,
+                    sort="best",
+                    hl="en",
+                    debug=False,
+                )
+                priority_jobs.append({
+                    "origin": o, "dest": d, "dest_label": d,
+                    "mode": "iata", "iso_country": None, "trip_type": "one_way",
+                    "depart_date": depart_date, "return_date": None,
+                    "cabin": "economy", "adults": 1, "sort": "best", "url": url,
+                })
+                seen.add((o, d))
+            except Exception:
+                pass
+    jobs = priority_jobs + jobs
 
     return pd.DataFrame(jobs)

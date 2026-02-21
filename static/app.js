@@ -1,6 +1,57 @@
 (function () {
   const API = '';
 
+  let currentUser = null;
+  let Clerk = null;
+
+  async function loadClerkAndRun(publishableKey) {
+    if (!publishableKey) {
+      runApp();
+      return;
+    }
+    return new Promise(function (resolve) {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.clerk.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+      script.async = true;
+      script.setAttribute('data-clerk-publishable-key', publishableKey);
+      script.onload = function () {
+        Clerk = window.Clerk;
+        runApp();
+        resolve();
+      };
+      script.onerror = function () { runApp(); resolve(); };
+      document.head.appendChild(script);
+    });
+  }
+
+  async function initializeAuth() {
+    if (!Clerk) return;
+    try {
+      await Clerk.load();
+      if (Clerk.user) {
+        currentUser = {
+          id: Clerk.user.id,
+          email: Clerk.user.primaryEmailAddress?.emailAddress || '',
+          firstName: Clerk.user.firstName || 'Account',
+          avatar: Clerk.user.imageUrl || ''
+        };
+        document.getElementById('user-name').textContent = currentUser.firstName;
+        document.getElementById('user-avatar').src = currentUser.avatar || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23666"/><rect width="24" height="24" fill="%23ddd"/></svg>';
+        document.getElementById('user-avatar').alt = currentUser.firstName;
+        document.getElementById('user-menu').style.display = 'flex';
+        document.getElementById('user-menu').classList.add('header-auth-visible');
+        document.getElementById('sign-in-section').style.display = 'none';
+      } else {
+        document.getElementById('sign-in-section').style.display = 'flex';
+        document.getElementById('sign-in-section').classList.add('header-auth-visible');
+        document.getElementById('user-menu').style.display = 'none';
+      }
+    } catch (e) {
+      document.getElementById('sign-in-section').style.display = 'flex';
+      document.getElementById('sign-in-section').classList.add('header-auth-visible');
+    }
+  }
+
   function runApp() {
     const originSelect = document.getElementById('origin');
     const searchInput = document.getElementById('search-input');
@@ -33,7 +84,6 @@
 
   function getCityImage(airportCode) {
     if (!airportCode) return '/static/images/states/georgia.jpg';
-    if (CITY_IMAGES[airportCode]) return CITY_IMAGES[airportCode];
     return `/static/images/airports/${airportCode}.jpg`;
   }
 
@@ -61,15 +111,21 @@
     'SMF': 'Sacramento', 'CLE': 'Cleveland', 'MKE': 'Milwaukee', 'SNA': 'Santa Ana', 'ANC': 'Anchorage',
     'DXB': 'Dubai', 'AUH': 'Abu Dhabi', 'DOH': 'Doha', 'SIN': 'Singapore', 'HKG': 'Hong Kong',
     'NRT': 'Tokyo', 'HND': 'Tokyo', 'ICN': 'Seoul', 'BKK': 'Bangkok', 'KUL': 'Kuala Lumpur',
-    'LHR': 'London', 'CDG': 'Paris', 'FRA': 'Frankfurt', 'AMS': 'Amsterdam', 'BCN': 'Barcelona',
+    'LHR': 'London', 'CDG': 'Paris', 'ORY': 'Paris', 'FRA': 'Frankfurt', 'AMS': 'Amsterdam', 'BCN': 'Barcelona',
     'MAD': 'Madrid', 'FCO': 'Rome', 'DUB': 'Dublin', 'EDI': 'Edinburgh', 'MEX': 'Mexico City',
-    'YYZ': 'Toronto', 'YVR': 'Vancouver', 'YUL': 'Montreal', 'SYD': 'Sydney', 'MEL': 'Melbourne',
-    'AKL': 'Auckland', 'JNB': 'Johannesburg', 'CPT': 'Cape Town', 'CAI': 'Cairo', 'TLV': 'Tel Aviv',
+    'MUC': 'Munich', 'ZRH': 'Zurich', 'VIE': 'Vienna', 'ATH': 'Athens', 'IST': 'Istanbul',
+    'CPH': 'Copenhagen', 'OSL': 'Oslo', 'ARN': 'Stockholm', 'PRG': 'Prague', 'BUD': 'Budapest',
+    'WAW': 'Warsaw', 'LIS': 'Lisbon', 'BRU': 'Brussels',
+    'YYZ': 'Toronto', 'YVR': 'Vancouver', 'YUL': 'Montreal', 'YTZ': 'Toronto',
+    'SYD': 'Sydney', 'MEL': 'Melbourne',
+    'AKL': 'Auckland', 'BNE': 'Brisbane', 'GRU': 'São Paulo', 'EZE': 'Buenos Aires',
+    'JNB': 'Johannesburg', 'CPT': 'Cape Town', 'CAI': 'Cairo', 'TLV': 'Tel Aviv',
     'DEL': 'Delhi', 'BOM': 'Mumbai', 'SJO': 'San Jose', 'PTY': 'Panama City',
   };
 
   const AIRPORT_TO_COUNTRY = {
     'DXB': 'ae', 'AUH': 'ae', 'SHJ': 'ae', 'DOH': 'qa', 'BAH': 'bh', 'KBL': 'af',
+    'YTZ': 'ca', 'ORY': 'fr',
     'SIN': 'sg', 'HKG': 'hk', 'NRT': 'jp', 'HND': 'jp', 'ICN': 'kr', 'BKK': 'th',
     'KUL': 'my', 'DEL': 'in', 'BOM': 'in', 'DAC': 'bd',
     'LHR': 'gb', 'CDG': 'fr', 'FRA': 'de', 'AMS': 'nl', 'BCN': 'es', 'MAD': 'es',
@@ -77,34 +133,9 @@
     'YYZ': 'ca', 'YVR': 'ca', 'YUL': 'ca', 'MEX': 'mx', 'GRU': 'br', 'EZE': 'ar',
     'SYD': 'au', 'MEL': 'au', 'BNE': 'au', 'AKL': 'nz',
     'JNB': 'za', 'CPT': 'za', 'CAI': 'eg', 'PTY': 'pa', 'SJO': 'cr', 'TLV': 'il',
+    'ARN': 'se', 'MUC': 'de', 'ATH': 'gr', 'IST': 'tr', 'CPH': 'dk', 'OSL': 'no',
+    'PRG': 'cz', 'BUD': 'hu', 'WAW': 'pl', 'LIS': 'pt',
     'ATL': 'us', 'LAX': 'us', 'MIA': 'us', 'SFO': 'us', 'DEN': 'us', 'ORD': 'us'
-  };
-
-  const CITY_IMAGES = {
-    'DXB': 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=400&fit=crop',
-    'AUH': 'https://images.unsplash.com/photo-1518684079-3c830dcef090?w=400&fit=crop',
-    'DOH': 'https://images.unsplash.com/photo-1570701513264-e09c5d7ea2e5?w=400&fit=crop',
-    'SIN': 'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=400&fit=crop',
-    'HKG': 'https://images.unsplash.com/photo-1536599018102-9f803c140fc1?w=400&fit=crop',
-    'NRT': 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&fit=crop',
-    'HND': 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&fit=crop',
-    'ICN': 'https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=400&fit=crop',
-    'LHR': 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=400&fit=crop',
-    'CDG': 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400&fit=crop',
-    'FRA': 'https://images.unsplash.com/photo-1564981797816-1043664bf78d?w=400&fit=crop',
-    'AMS': 'https://images.unsplash.com/photo-1534351590666-13e3e96b5017?w=400&fit=crop',
-    'BCN': 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=400&fit=crop',
-    'MAD': 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?w=400&fit=crop',
-    'FCO': 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=400&fit=crop',
-    'DUB': 'https://images.unsplash.com/photo-1549918864-48ac978761a4?w=400&fit=crop',
-    'EDI': 'https://images.unsplash.com/photo-1603231639062-0eb8b1d210c4?w=400&fit=crop',
-    'YYZ': 'https://images.unsplash.com/photo-1517935706615-2717063c2225?w=400&fit=crop',
-    'YVR': 'https://images.unsplash.com/photo-1503919545889-aef636e10ad4?w=400&fit=crop',
-    'YUL': 'https://images.unsplash.com/photo-1497602172604-bfa09185fd5e?w=400&fit=crop',
-    'SYD': 'https://images.unsplash.com/photo-1549180030-48bf079a38b1?w=400&fit=crop',
-    'MEL': 'https://images.unsplash.com/photo-1545044846-351ba303b5b6?w=400&fit=crop',
-    'MEX': 'https://images.unsplash.com/photo-1518639192441-8fce0a366e8e?w=400&fit=crop',
-    'AKL': 'https://images.unsplash.com/photo-1507699629798-6870c2a0a90a?w=400&fit=crop',
   };
 
   let airports = [];
@@ -344,9 +375,13 @@
           airline: deal.airline, duration, num_stops: deal.num_stops,
           google_booking_url: deal.google_booking_url || ''
         }));
+        const imgWebp = `/static/images/airports/${code}.webp`;
         return `
         <div class="deal-card" data-destination="${code}">
-          <img class="card-image" src="${imgSrc}" alt="${cityName}" loading="lazy" data-fallback="${escapeAttr(imgFallback)}" data-final-fallback="${fallbackSvg}" onerror="if(this.dataset.tried){this.src=this.dataset.finalFallback}else{this.dataset.tried=1;this.src=this.dataset.fallback}">
+          <picture>
+            <source srcset="${escapeAttr(imgWebp)}" type="image/webp">
+            <img class="card-image" src="${imgSrc}" alt="${cityName}" loading="lazy" data-fallback="${escapeAttr(imgFallback)}" data-final-fallback="${fallbackSvg}" onerror="if(this.dataset.tried){this.src=this.dataset.finalFallback}else{this.dataset.tried=1;this.src=this.dataset.fallback}">
+          </picture>
           <div class="card-content">
             ${originBadge}
             <h3 class="city-name">${cityName}</h3>
@@ -358,6 +393,8 @@
             <div class="card-actions">
               <a class="btn-primary" href="${escapeAttr(bookRedirectUrl)}" target="_blank" rel="noopener" title="Book direct (~10 sec)">Book Now →</a>
               <a class="btn-secondary" href="${escapeAttr(googleFlightsUrl)}" target="_blank" rel="noopener">Compare on Google</a>
+              <button type="button" class="btn-alert" data-alert="${escapeAttr(JSON.stringify({ origin, destination: dest, departure_date: depDate, price: oneWayPrice }))}" title="Get notified when price drops">🔔 Set Price Alert</button>
+              <button type="button" class="btn-save-flight" data-save-origin="${escapeAttr(origin)}" data-save-dest="${escapeAttr(dest)}" title="Save this route">Save</button>
               <button type="button" class="btn-return" data-deal="${dealJson}">+ Add return flight</button>
             </div>
           </div>
@@ -671,20 +708,366 @@
 
   if (dealsGrid) {
     dealsGrid.addEventListener('click', function (e) {
-      const btn = e.target.closest('.btn-return');
-      if (btn) {
+      const returnBtn = e.target.closest('.btn-return');
+      if (returnBtn) {
         e.preventDefault();
-        showReturnOptions(btn.dataset.deal ? JSON.parse(btn.dataset.deal) : null);
+        showReturnOptions(returnBtn.dataset.deal ? JSON.parse(returnBtn.dataset.deal) : null);
+        return;
+      }
+      const alertBtn = e.target.closest('.btn-alert');
+      if (alertBtn) {
+        e.preventDefault();
+        try {
+          const data = JSON.parse(alertBtn.dataset.alert || '{}');
+          window.openAlertModal && openAlertModal(data);
+        } catch (err) {}
+      }
+      const saveBtn = e.target.closest('.btn-save-flight');
+      if (saveBtn && !saveBtn.disabled) {
+        e.preventDefault();
+        const origin = saveBtn.dataset.saveOrigin;
+        const dest = saveBtn.dataset.saveDest;
+        if (origin && dest) saveFlightFromCard(origin, dest, saveBtn);
       }
     });
   }
 
+  window.openAlertModal = function (data) {
+    if (!data || !data.origin || !data.destination) return;
+    if (!currentUser) {
+      if (Clerk) {
+        if (confirm('Sign in to set price alerts. Sign in now?')) Clerk.openSignIn();
+      } else {
+        alert('Sign in is required for price alerts. Set up Clerk to enable this feature.');
+      }
+      return;
+    }
+    document.getElementById('alert-route').textContent = data.origin + ' → ' + data.destination;
+    document.getElementById('alert-current-price').textContent = Math.round(data.price || 0);
+    document.getElementById('alert-target-price').value = Math.round((data.price || 0) * 0.8);
+    document.getElementById('alert-origin').value = data.origin;
+    document.getElementById('alert-destination').value = data.destination;
+    document.getElementById('alert-modal').classList.remove('hidden');
+  };
+
+  window.closeAlertModal = function () {
+    document.getElementById('alert-modal').classList.add('hidden');
+  };
+
+  document.getElementById('alert-form')?.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    if (!currentUser) {
+      alert('Please sign in to set alerts');
+      return;
+    }
+    const origin = document.getElementById('alert-origin').value;
+    const destination = document.getElementById('alert-destination').value;
+    const targetPrice = parseFloat(document.getElementById('alert-target-price').value);
+    if (!origin || !destination || isNaN(targetPrice)) return;
+    try {
+      let token = '';
+      if (Clerk && Clerk.session) token = await Clerk.session.getToken();
+      const res = await fetch(`${API}/api/alerts/subscribe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? 'Bearer ' + token : ''
+        },
+        body: JSON.stringify({
+          user_id: currentUser.id,
+          email: currentUser.email,
+          origin, destination, target_price: targetPrice
+        })
+      });
+      const data = await res.json().catch(function () { return {}; });
+      if (res.ok) {
+        alert('Price alert set! We\'ll email you when the price drops.');
+        closeAlertModal();
+      } else {
+        alert(data.error || data.detail || 'Failed to set alert. Please try again.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to set alert. Please try again.');
+    }
+  });
+
+  document.getElementById('alert-modal')?.querySelector('.modal-backdrop')?.addEventListener('click', closeAlertModal);
+  document.getElementById('alert-modal')?.querySelector('.modal-close')?.addEventListener('click', closeAlertModal);
+
+  [document.getElementById('my-alerts-modal'), document.getElementById('saved-flights-modal')].forEach(function (m) {
+    if (!m) return;
+    m.querySelector('.modal-backdrop')?.addEventListener('click', function () {
+      if (m.id === 'my-alerts-modal') closeMyAlertsModal(); else closeSavedFlightsModal();
+    });
+    m.querySelector('.modal-close')?.addEventListener('click', function () {
+      if (m.id === 'my-alerts-modal') closeMyAlertsModal(); else closeSavedFlightsModal();
+    });
+    m.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        if (m.id === 'my-alerts-modal') closeMyAlertsModal(); else closeSavedFlightsModal();
+      }
+    });
+  });
+
+  document.getElementById('btn-sign-in')?.addEventListener('click', function () {
+    if (Clerk) Clerk.openSignIn();
+  });
+  document.getElementById('btn-sign-up')?.addEventListener('click', function () {
+    if (Clerk) Clerk.openSignUp();
+  });
+
+  const userMenuTrigger = document.getElementById('user-menu-trigger');
+  const userDropdown = document.getElementById('user-dropdown');
+  if (userMenuTrigger && userDropdown) {
+    userMenuTrigger.addEventListener('click', function (e) {
+      e.stopPropagation();
+      userDropdown.classList.toggle('hidden');
+    });
+    document.addEventListener('click', function () {
+      userDropdown.classList.add('hidden');
+    });
+  }
+  document.getElementById('link-sign-out')?.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (Clerk) Clerk.signOut();
+  });
+  document.getElementById('link-my-alerts')?.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (currentUser) openMyAlertsModal(); else if (Clerk) Clerk.openSignIn();
+  });
+
+  document.getElementById('link-saved-flights')?.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (currentUser) openSavedFlightsModal(); else if (Clerk) Clerk.openSignIn();
+  });
+
+  function checkHashAndOpenModals() {
+    const hash = (window.location.hash || '').toLowerCase();
+    if (hash === '#alerts' && currentUser) openMyAlertsModal();
+    if (hash === '#saved' && currentUser) openSavedFlightsModal();
+  }
+
+  window.addEventListener('hashchange', checkHashAndOpenModals);
+
+  window.openMyAlertsModal = function () {
+    const modal = document.getElementById('my-alerts-modal');
+    const listEl = document.getElementById('my-alerts-list');
+    const emptyEl = document.getElementById('my-alerts-empty');
+    if (!modal || !listEl) return;
+    listEl.innerHTML = '<p class="alerts-loading">Loading...</p>';
+    emptyEl.classList.add('hidden');
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    fetchMyAlerts();
+  };
+
+  window.closeMyAlertsModal = function () {
+    const modal = document.getElementById('my-alerts-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    if (window.location.hash === '#alerts') history.replaceState(null, '', window.location.pathname);
+  };
+
+  async function fetchMyAlerts() {
+    const listEl = document.getElementById('my-alerts-list');
+    const emptyEl = document.getElementById('my-alerts-empty');
+    if (!listEl) return;
+    try {
+      let token = '';
+      if (Clerk && Clerk.session) token = await Clerk.session.getToken();
+      const res = await fetch(`${API}/api/alerts`, {
+        headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+      });
+      const data = await res.json().catch(function () { return {}; });
+      const alerts = data.alerts || [];
+      if (alerts.length === 0) {
+        listEl.innerHTML = '';
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+      emptyEl.classList.add('hidden');
+      listEl.innerHTML = alerts.map(function (a) {
+        const created = a.created_at ? new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+        return `<div class="alert-item" data-id="${a.id}">
+          <div class="alert-item-info">
+            <div class="alert-item-route">${escapeHtml(a.origin)} → ${escapeHtml(a.destination)}</div>
+            <div class="alert-item-meta">Target: $${Math.round(a.target_price)} · Created ${created}</div>
+          </div>
+          <button type="button" class="btn-delete" data-delete-alert="${a.id}" aria-label="Delete alert">Delete</button>
+        </div>`;
+      }).join('');
+      listEl.querySelectorAll('.btn-delete').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const id = parseInt(btn.dataset.deleteAlert, 10);
+          if (id) deleteAlert(id, btn);
+        });
+      });
+    } catch (e) {
+      listEl.innerHTML = '<p class="alerts-loading">Failed to load alerts. Please try again.</p>';
+    }
+  }
+
+  async function deleteAlert(id, btnEl) {
+    if (!confirm('Remove this price alert?')) return;
+    try {
+      let token = '';
+      if (Clerk && Clerk.session) token = await Clerk.session.getToken();
+      const res = await fetch(`${API}/api/alerts/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+      });
+      if (res.ok) {
+        const item = btnEl.closest('.alert-item');
+        if (item) item.remove();
+        const listEl = document.getElementById('my-alerts-list');
+        const emptyEl = document.getElementById('my-alerts-empty');
+        if (listEl && listEl.children.length === 0 && emptyEl) emptyEl.classList.remove('hidden');
+      } else {
+        alert('Failed to delete alert.');
+      }
+    } catch (e) {
+      alert('Failed to delete alert.');
+    }
+  }
+
+  window.openSavedFlightsModal = function () {
+    const modal = document.getElementById('saved-flights-modal');
+    const listEl = document.getElementById('saved-flights-list');
+    const emptyEl = document.getElementById('saved-flights-empty');
+    if (!modal || !listEl) return;
+    listEl.innerHTML = '<p class="alerts-loading">Loading...</p>';
+    emptyEl.classList.add('hidden');
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    fetchSavedFlights();
+  };
+
+  window.closeSavedFlightsModal = function () {
+    const modal = document.getElementById('saved-flights-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    if (window.location.hash === '#saved') history.replaceState(null, '', window.location.pathname);
+  };
+
+  async function fetchSavedFlights() {
+    const listEl = document.getElementById('saved-flights-list');
+    const emptyEl = document.getElementById('saved-flights-empty');
+    if (!listEl) return;
+    try {
+      let token = '';
+      if (Clerk && Clerk.session) token = await Clerk.session.getToken();
+      const res = await fetch(`${API}/api/saved-flights`, {
+        headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+      });
+      const data = await res.json().catch(function () { return {}; });
+      const flights = data.saved_flights || [];
+      if (flights.length === 0) {
+        listEl.innerHTML = '';
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+      emptyEl.classList.add('hidden');
+      listEl.innerHTML = flights.map(function (f) {
+        const created = f.created_at ? new Date(f.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+        const searchUrl = `https://www.google.com/travel/flights?q=${encodeURIComponent('Flights from ' + f.origin + ' to ' + f.destination)}`;
+        const note = f.notes ? escapeHtml(f.notes) : '';
+        return `<div class="saved-flight-item" data-id="${f.id}">
+          <div class="saved-flight-info">
+            <div class="saved-flight-route">${escapeHtml(f.origin)} → ${escapeHtml(f.destination)}</div>
+            <div class="saved-flight-meta">${note || created || ''}</div>
+          </div>
+          <div class="saved-flight-actions">
+            <a href="${escapeAttr(searchUrl)}" target="_blank" rel="noopener" class="btn-secondary" style="padding:8px 12px;font-size:0.85rem;">Search</a>
+            <button type="button" class="btn-delete" data-delete-saved="${f.id}" aria-label="Remove">Remove</button>
+          </div>
+        </div>`;
+      }).join('');
+      listEl.querySelectorAll('.btn-delete').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const id = parseInt(btn.dataset.deleteSaved, 10);
+          if (id) deleteSavedFlight(id, btn);
+        });
+      });
+    } catch (e) {
+      listEl.innerHTML = '<p class="alerts-loading">Failed to load saved flights. Please try again.</p>';
+    }
+  }
+
+  async function deleteSavedFlight(id, btnEl) {
+    try {
+      let token = '';
+      if (Clerk && Clerk.session) token = await Clerk.session.getToken();
+      const res = await fetch(`${API}/api/saved-flights/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+      });
+      if (res.ok) {
+        const item = btnEl.closest('.saved-flight-item');
+        if (item) item.remove();
+        const listEl = document.getElementById('saved-flights-list');
+        const emptyEl = document.getElementById('saved-flights-empty');
+        if (listEl && listEl.children.length === 0 && emptyEl) emptyEl.classList.remove('hidden');
+      } else {
+        alert('Failed to remove saved flight.');
+      }
+    } catch (e) {
+      alert('Failed to remove saved flight.');
+    }
+  }
+
+  async function saveFlightFromCard(origin, destination, btnEl) {
+    if (!currentUser) {
+      if (Clerk) Clerk.openSignIn();
+      return;
+    }
+    try {
+      let token = '';
+      if (Clerk && Clerk.session) token = await Clerk.session.getToken();
+      const res = await fetch(`${API}/api/saved-flights`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? 'Bearer ' + token : ''
+        },
+        body: JSON.stringify({ origin, destination })
+      });
+      const data = await res.json().catch(function () { return {}; });
+      if (res.ok) {
+        if (btnEl) {
+          btnEl.textContent = 'Saved ✓';
+          btnEl.classList.add('saved');
+          btnEl.disabled = true;
+        }
+      } else {
+        alert(data.error || data.detail || 'Failed to save.');
+      }
+    } catch (e) {
+      alert('Failed to save flight.');
+    }
+  }
+
   loadAirports();
+  Promise.resolve(initializeAuth()).then(checkHashAndOpenModals);
+  }
+
+  async function bootstrap() {
+    try {
+      const res = await fetch(`${API}/api/config`);
+      const config = await res.json();
+      await loadClerkAndRun(config.clerkPublishableKey || '');
+    } catch (e) {
+      runApp();
+    }
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', runApp);
+    document.addEventListener('DOMContentLoaded', bootstrap);
   } else {
-    runApp();
+    bootstrap();
   }
 })();

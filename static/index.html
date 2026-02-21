@@ -12,12 +12,27 @@
 </head>
 <body>
   <header class="header">
-    <div class="container">
+    <div class="container header-inner">
       <a href="/" class="logo-link">
         <img src="/static/images/logo.png" alt="FlightGrab" class="logo-img">
         <span class="logo-text">FlightGrab</span>
       </a>
       <p class="tagline">Find the cheapest flights today</p>
+      <div id="sign-in-section" class="header-auth" style="display: none;">
+        <button type="button" class="btn-header btn-secondary" id="btn-sign-in">Sign In</button>
+        <button type="button" class="btn-header btn-primary" id="btn-sign-up">Sign Up Free</button>
+      </div>
+      <div id="user-menu" class="header-auth" style="display: none;">
+        <div class="user-menu-trigger" id="user-menu-trigger">
+          <img id="user-avatar" src="" alt="" class="user-avatar" width="32" height="32">
+          <span id="user-name"></span>
+        </div>
+        <div id="user-dropdown" class="user-dropdown hidden">
+          <a href="#alerts" id="link-my-alerts">My Alerts</a>
+          <a href="#saved" id="link-saved-flights">Saved Flights</a>
+          <a href="#" id="link-sign-out">Sign Out</a>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -162,6 +177,57 @@
           <button type="button" class="btn-secondary" id="book-separate-btn">Book flights separately</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="my-alerts-modal" class="modal hidden" role="dialog" aria-labelledby="my-alerts-modal-title" aria-modal="true" aria-hidden="true">
+    <div class="modal-backdrop" onclick="window.closeMyAlertsModal && closeMyAlertsModal()"></div>
+    <div class="modal-content modal-medium">
+      <button type="button" class="modal-close" onclick="window.closeMyAlertsModal && closeMyAlertsModal()" aria-label="Close">&times;</button>
+      <h2 id="my-alerts-modal-title" class="modal-title">My Price Alerts</h2>
+      <p class="modal-subtitle">Manage your price alerts. We'll email you when prices drop below your target.</p>
+      <div id="my-alerts-list" class="alerts-list">
+        <p class="alerts-loading">Loading...</p>
+      </div>
+      <p id="my-alerts-empty" class="alerts-empty hidden">You have no active alerts. Set one from any deal card!</p>
+    </div>
+  </div>
+
+  <div id="saved-flights-modal" class="modal hidden" role="dialog" aria-labelledby="saved-flights-modal-title" aria-modal="true" aria-hidden="true">
+    <div class="modal-backdrop" onclick="window.closeSavedFlightsModal && closeSavedFlightsModal()"></div>
+    <div class="modal-content modal-medium">
+      <button type="button" class="modal-close" onclick="window.closeSavedFlightsModal && closeSavedFlightsModal()" aria-label="Close">&times;</button>
+      <h2 id="saved-flights-modal-title" class="modal-title">Saved Flights</h2>
+      <p class="modal-subtitle">Routes you've saved for quick access.</p>
+      <div id="saved-flights-list" class="alerts-list">
+        <p class="alerts-loading">Loading...</p>
+      </div>
+      <p id="saved-flights-empty" class="alerts-empty hidden">No saved flights yet. Click "Save" on any deal card!</p>
+    </div>
+  </div>
+
+  <div id="alert-modal" class="modal hidden" role="dialog" aria-labelledby="alert-modal-title">
+    <div class="modal-backdrop" onclick="window.closeAlertModal && closeAlertModal()"></div>
+    <div class="modal-content modal-small">
+      <button type="button" class="modal-close" onclick="window.closeAlertModal && closeAlertModal()" aria-label="Close">&times;</button>
+      <h2 id="alert-modal-title" class="modal-title">Set Price Alert</h2>
+      <p class="modal-subtitle">
+        Get notified when <strong id="alert-route">ATL → MIA</strong> drops below your target
+      </p>
+      <form id="alert-form">
+        <div class="form-group">
+          <label for="alert-target-price">Target price (one-way)</label>
+          <div class="input-with-prefix">
+            <span class="prefix">$</span>
+            <input type="number" id="alert-target-price" placeholder="100" min="0" step="1" required>
+          </div>
+          <small>Current price: $<span id="alert-current-price">—</span></small>
+        </div>
+        <input type="hidden" id="alert-origin">
+        <input type="hidden" id="alert-destination">
+        <button type="submit" class="btn-primary btn-full">Set Alert</button>
+      </form>
+      <p class="alert-note">📧 We'll email you when the price drops below your target.</p>
     </div>
   </div>
 

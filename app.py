@@ -5,7 +5,7 @@ FlightGrab - Flight Deals Aggregator API
 import os
 import urllib.parse
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Header, Body
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -14,6 +14,27 @@ from dotenv import load_dotenv
 from db_manager import FlightDatabase
 
 load_dotenv()
+
+
+def _verify_clerk_token(authorization: str | None) -> str | None:
+    """Verify Clerk JWT and return user_id (sub claim) or None."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization[7:].strip()
+    if not token:
+        return None
+    jwks_url = os.getenv("CLERK_JWKS_URL")
+    if not jwks_url:
+        return None
+    try:
+        import jwt
+        from jwt import PyJWKClient
+        jwks_client = PyJWKClient(jwks_url)
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        payload = jwt.decode(token, signing_key.key, algorithms=["RS256"])
+        return payload.get("sub")
+    except Exception:
+        return None
 
 # Lazy load Playwright-based generator (heavy dependency)
 _booking_generator = None
@@ -61,6 +82,14 @@ async def ping():
     Supports both GET and HEAD (monitors often use HEAD).
     """
     return {"status": "ok", "ping": "pong"}
+
+
+@app.get("/api/config")
+async def get_config():
+    """Public config for frontend (Clerk key, etc.)."""
+    return {
+        "clerkPublishableKey": os.getenv("CLERK_PUBLISHABLE_KEY", ""),
+    }
 
 
 @app.get("/")
@@ -217,6 +246,116 @@ async def book_redirect(
         pass
 
     return RedirectResponse(url=google_booking_url)
+
+
+@app.post("/api/alerts/subscribe")
+async def subscribe_alert(
+    body: dict = Body(...),
+    authorization: str = Header(None),
+):
+    """Subscribe to price alert. Requires Clerk auth."""
+    user_id = _verify_clerk_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    user_id_body = body.get("user_id")
+    if user_id_body and user_id_body != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    origin = (body.get("origin") or "")[:3].upper()
+    destination = (body.get("destination") or "")[:3].upper()
+    target_price = float(body.get("target_price", 0))
+    email = (body.get("email") or "").strip()
+    if not origin or len(origin) != 3 or not destination or len(destination) != 3 or target_price <= 0:
+        raise HTTPException(status_code=400, detail="Invalid origin, destination, or target price")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email required")
+    db = get_db()
+    try:
+        alert_id = db.subscribe_alert(user_id, email, origin, destination, target_price)
+        return {"id": alert_id, "status": "active"}
+    finally:
+        db.close()
+
+
+@app.get("/api/alerts")
+async def get_my_alerts(authorization: str = Header(None)):
+    """Get user's active alerts. Requires Clerk auth."""
+    user_id = _verify_clerk_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    db = get_db()
+    try:
+        alerts = db.get_user_alerts(user_id)
+        return {"alerts": alerts}
+    finally:
+        db.close()
+
+
+@app.delete("/api/alerts/{alert_id:int}")
+async def delete_alert(alert_id: int, authorization: str = Header(None)):
+    """Deactivate an alert. Requires Clerk auth."""
+    user_id = _verify_clerk_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    db = get_db()
+    try:
+        ok = db.deactivate_alert(alert_id, user_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        return {"status": "deleted"}
+    finally:
+        db.close()
+
+
+@app.post("/api/saved-flights")
+async def save_flight(
+    body: dict = Body(...),
+    authorization: str = Header(None),
+):
+    """Save a route. Requires Clerk auth."""
+    user_id = _verify_clerk_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    origin = (body.get("origin") or "")[:3].upper()
+    destination = (body.get("destination") or "")[:3].upper()
+    notes = (body.get("notes") or "").strip() or None
+    if not origin or len(origin) != 3 or not destination or len(destination) != 3:
+        raise HTTPException(status_code=400, detail="Invalid origin or destination")
+    db = get_db()
+    try:
+        saved_id = db.save_flight(user_id, origin, destination, notes)
+        return {"id": saved_id, "status": "saved"}
+    finally:
+        db.close()
+
+
+@app.get("/api/saved-flights")
+async def get_saved_flights(authorization: str = Header(None)):
+    """Get user's saved flights. Requires Clerk auth."""
+    user_id = _verify_clerk_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    db = get_db()
+    try:
+        flights = db.get_user_saved_flights(user_id)
+        return {"saved_flights": flights}
+    finally:
+        db.close()
+
+
+@app.delete("/api/saved-flights/{saved_id:int}")
+async def delete_saved_flight(saved_id: int, authorization: str = Header(None)):
+    """Delete a saved flight. Requires Clerk auth."""
+    user_id = _verify_clerk_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    db = get_db()
+    try:
+        ok = db.delete_saved_flight(saved_id, user_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Saved flight not found")
+        return {"status": "deleted"}
+    finally:
+        db.close()
 
 
 @app.get("/api/health")

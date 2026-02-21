@@ -51,6 +51,15 @@ python scrape_and_save_pipeline.py --mode popular --max-countries 20 \
 - **Faster coverage**: Increase `MAX_JOBS_PER_RUN` (risk timeout) or run workflow multiple times per day
 - **Full coverage**: Set `MAX_COUNTRIES` to `null`/empty for all ~200 countries (job build will be slower due to Wikidata lookups)
 
+## Scrape Summary Email
+
+After all workers finish, a summary email is sent to `tparboosingh84@gmail.com` (or `SCRAPE_SUMMARY_EMAIL` repo variable) with:
+- Total flight options in DB
+- Distinct routes & origins
+- Flights updated today
+
+Requires `ZOHO_SMTP_PASSWORD` secret and ZeptoMail SMTP config (same as price alerts).
+
 ## Dependencies
 
 Requires `playwright` and Chromium. The workflow runs:

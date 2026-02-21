@@ -1,0 +1,27 @@
+name: Check Price Alerts
+
+on:
+  schedule:
+    - cron: '30 4 * * *'  # 4:30 AM UTC daily (after scrape)
+  workflow_dispatch:
+
+jobs:
+  check-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install psycopg2-binary python-dotenv
+
+      - name: Run alert checker
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ZOHO_SMTP_PASSWORD: ${{ secrets.ZOHO_SMTP_PASSWORD }}
+          ZOHO_FROM_EMAIL: ${{ vars.ZOHO_FROM_EMAIL }}
+          APP_URL: ${{ vars.APP_URL }}
+        run: python alert_checker.py

@@ -87,6 +87,34 @@ class FlightDatabase:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_route_history ON price_history(route);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_snapshot_date ON price_history(snapshot_date);")
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS price_alerts (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL,
+                origin VARCHAR(3) NOT NULL,
+                destination VARCHAR(3) NOT NULL,
+                target_price DECIMAL(10,2) NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                last_notified_at TIMESTAMP,
+                is_active BOOLEAN DEFAULT TRUE
+            );
+        """)
+        for col in ['user_id', 'origin', 'destination', 'is_active']:
+            cursor.execute(f"CREATE INDEX IF NOT EXISTS idx_alerts_{col} ON price_alerts({col});")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS saved_flights (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR(255) NOT NULL,
+                origin VARCHAR(3) NOT NULL,
+                destination VARCHAR(3) NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_user ON saved_flights(user_id);")
+
         self.conn.commit()
         cursor.close()
         print("✓ Tables created")
@@ -295,7 +323,7 @@ class FlightDatabase:
                 for r in rows
             ],
             key=lambda x: x['price']
-        )[:50]
+        )[:150]
 
     def get_origins_with_data(self):
         """Return origin codes that have future departure data."""
@@ -396,6 +424,174 @@ class FlightDatabase:
             'booking_url': row[11],
             'google_booking_url': row[12] if len(row) > 12 else None,
         }
+
+    def subscribe_alert(self, user_id: str, email: str, origin: str, destination: str, target_price: float) -> int:
+        """Insert price alert, return alert id."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO price_alerts (user_id, email, origin, destination, target_price)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (user_id, email, origin.upper(), destination.upper(), target_price),
+        )
+        alert_id = cursor.fetchone()[0]
+        self.conn.commit()
+        cursor.close()
+        return alert_id
+
+    def get_user_alerts(self, user_id: str):
+        """Get active alerts for a user."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, origin, destination, target_price, created_at, last_notified_at
+            FROM price_alerts
+            WHERE user_id = %s AND is_active = TRUE
+            ORDER BY created_at DESC
+            """,
+            (user_id,),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        return [
+            {
+                "id": r[0],
+                "origin": r[1],
+                "destination": r[2],
+                "target_price": float(r[3]),
+                "created_at": r[4].isoformat() if r[4] else None,
+                "last_notified_at": r[5].isoformat() if r[5] else None,
+            }
+            for r in rows
+        ]
+
+    def get_triggered_alerts(self):
+        """
+        Get active alerts where current price is at or below target.
+        Join with cheapest current price per route. Exclude recently notified.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            WITH cheapest AS (
+                SELECT DISTINCT ON (origin, destination)
+                    origin, destination, price, departure_date,
+                    COALESCE(google_booking_url, booking_url) as booking_url
+                FROM current_prices
+                WHERE departure_date >= CURRENT_DATE AND price > 0
+                ORDER BY origin, destination, price ASC
+            )
+            SELECT a.id, a.email, a.origin, a.destination, a.target_price,
+                   c.price, c.departure_date, c.booking_url
+            FROM price_alerts a
+            JOIN cheapest c ON a.origin = c.origin AND a.destination = c.destination
+            WHERE a.is_active = TRUE AND c.price <= a.target_price
+            AND (a.last_notified_at IS NULL OR a.last_notified_at < CURRENT_DATE)
+            ORDER BY c.price ASC
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        return [
+            {
+                "id": r[0],
+                "email": r[1],
+                "origin": r[2],
+                "destination": r[3],
+                "target_price": float(r[4]),
+                "current_price": float(r[5]),
+                "departure_date": r[6].isoformat() if r[6] else None,
+                "booking_url": r[7],
+            }
+            for r in rows
+        ]
+
+    def mark_alert_notified(self, alert_id: int):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "UPDATE price_alerts SET last_notified_at = NOW() WHERE id = %s",
+            (alert_id,),
+        )
+        self.conn.commit()
+        cursor.close()
+
+    def deactivate_alert(self, alert_id: int, user_id: str) -> bool:
+        """Deactivate alert if it belongs to user. Return True if updated."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "UPDATE price_alerts SET is_active = FALSE WHERE id = %s AND user_id = %s",
+            (alert_id, user_id),
+        )
+        updated = cursor.rowcount > 0
+        self.conn.commit()
+        cursor.close()
+        return updated
+
+    def save_flight(self, user_id: str, origin: str, destination: str, notes: str = None) -> int:
+        """Save a route for the user. Returns saved_flight id. Skips insert if already saved."""
+        origin, destination = origin.upper(), destination.upper()
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT id FROM saved_flights
+            WHERE user_id = %s AND origin = %s AND destination = %s
+            """,
+            (user_id, origin, destination),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            cursor.close()
+            return existing[0]
+        cursor.execute(
+            """
+            INSERT INTO saved_flights (user_id, origin, destination, notes)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
+            """,
+            (user_id, origin, destination, notes or ""),
+        )
+        row = cursor.fetchone()
+        saved_id = row[0] if row else 0
+        self.conn.commit()
+        cursor.close()
+        return saved_id
+
+    def get_user_saved_flights(self, user_id: str):
+        """Get saved flights for a user."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, origin, destination, notes, created_at
+            FROM saved_flights
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            """,
+            (user_id,),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        return [
+            {
+                "id": r[0],
+                "origin": r[1],
+                "destination": r[2],
+                "notes": (r[3] or "").strip() or None,
+                "created_at": r[4].isoformat() if r[4] else None,
+            }
+            for r in rows
+        ]
+
+    def delete_saved_flight(self, saved_id: int, user_id: str) -> bool:
+        """Delete saved flight if it belongs to user."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "DELETE FROM saved_flights WHERE id = %s AND user_id = %s",
+            (saved_id, user_id),
+        )
+        deleted = cursor.rowcount > 0
+        self.conn.commit()
+        cursor.close()
+        return deleted
 
     def close(self):
         if self.conn:

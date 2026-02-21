@@ -117,7 +117,7 @@ def run_pipeline(
     depart_date: str | None = None,
     top_origins_per_country: int = 3,
     max_countries: int | None = 5,
-    max_popular_destinations: int = 15,
+    max_popular_destinations: int = 40,
     max_jobs: int | None = 50,
     max_jobs_per_run: int | None = None,
     worker_id: int | None = None,
