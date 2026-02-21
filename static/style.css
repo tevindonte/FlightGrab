@@ -462,6 +462,102 @@ main.container {
   display: none !important;
 }
 
+.calendar-route-selector {
+  margin-bottom: 16px;
+}
+
+.calendar-origin-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+}
+
+.calendar-origin-display .label { color: var(--text-secondary); }
+.calendar-origin-display .value { font-weight: 600; }
+
+.calendar-destination-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calendar-destination-selector label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.dest-search-wrapper {
+  position: relative;
+  max-width: 340px;
+}
+
+.dest-search-wrapper input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.dest-search-wrapper input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.autocomplete-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.autocomplete-results.hidden { display: none; }
+
+.dest-result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dest-result-item:hover {
+  background: #f3f4f6;
+}
+
+.dest-result-item .dest-name {
+  font-weight: 500;
+}
+
+.dest-result-item .dest-price {
+  color: #16a34a;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.dest-result-item.dest-no-results {
+  cursor: default;
+  color: var(--text-secondary);
+}
+
+.dest-section-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #6b7280;
+  padding: 10px 16px 6px;
+}
+
 .calendar-view-header {
   display: flex;
   align-items: center;
@@ -498,6 +594,75 @@ main.container {
 .main-calendar-content .calendar-month-grid {
   max-width: 100%;
 }
+
+.calendar-month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.calendar-month-nav h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.calendar-month-nav button {
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.calendar-month-nav button:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.calendar-price-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  margin-bottom: 12px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.calendar-price-summary strong { color: var(--text); }
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-bottom: 12px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.calendar-legend .legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-legend .color-box {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.15);
+}
+
+.calendar-legend .color-box.cheapest { background: #dcfce7; border-color: #16a34a; }
+.calendar-legend .color-box.good-deal { background: #dbeafe; border-color: #3b82f6; }
+.calendar-legend .color-box.fair { background: #fef9c3; border-color: #eab308; }
+.calendar-legend .color-box.expensive { background: #fee2e2; border-color: #ef4444; }
 
 .filter-section {
   display: flex;
@@ -741,6 +906,17 @@ main.container {
   border-color: var(--primary);
 }
 
+.deal-card.shared-highlight {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.3);
+  animation: shared-pulse 1.5s ease-out 2;
+}
+
+@keyframes shared-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(26, 115, 232, 0.15); }
+}
+
 picture {
   display: block;
   line-height: 0;
@@ -801,6 +977,62 @@ picture {
   font-weight: 400;
   color: var(--text-secondary);
   margin-top: 2px;
+}
+
+.other-airports {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.other-airports summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  list-style: none;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.other-airports summary::-webkit-details-marker {
+  display: none;
+}
+
+.other-airports summary:hover {
+  color: var(--primary);
+}
+
+.airport-alternatives {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alt-airport {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: #f9fafb;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.2s;
+}
+
+.alt-airport:hover {
+  background: #f3f4f6;
+}
+
+.alt-airport .alt-name {
+  font-weight: 500;
+}
+
+.alt-airport .alt-price {
+  color: var(--primary);
+  font-weight: 600;
 }
 
 .card-actions {
@@ -884,8 +1116,198 @@ picture {
   color: var(--primary);
 }
 
+.card-actions .btn-share {
+  padding: 10px 16px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+  text-decoration: none;
+  text-align: center;
+  display: block;
+}
+
+.card-actions .btn-share:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .modal-small {
   max-width: 420px;
+}
+
+/* Share modal */
+.flight-preview-share {
+  background: #f9fafb;
+  padding: 20px;
+  border-radius: 12px;
+  margin: 16px 0;
+  text-align: center;
+}
+
+.share-route {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.share-price-display {
+  margin: 8px 0;
+}
+
+.share-price {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #16a34a;
+}
+
+.share-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-left: 6px;
+}
+
+.share-date {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.share-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.share-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  color: inherit;
+}
+
+.share-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.share-facebook {
+  border-color: #1877f2;
+  color: #1877f2;
+}
+
+.share-facebook:hover {
+  background: #1877f2;
+  color: white;
+}
+
+.share-twitter {
+  border-color: #000;
+  color: #000;
+}
+
+.share-twitter:hover {
+  background: #000;
+  color: white;
+}
+
+.share-whatsapp {
+  border-color: #25d366;
+  color: #25d366;
+}
+
+.share-whatsapp:hover {
+  background: #25d366;
+  color: white;
+}
+
+.share-email {
+  border-color: #ea4335;
+  color: #ea4335;
+}
+
+.share-email:hover {
+  background: #ea4335;
+  color: white;
+}
+
+.share-link {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.share-link label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.share-link .link-container {
+  display: flex;
+  gap: 8px;
+}
+
+.share-link .link-container input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: monospace;
+  background: #f9fafb;
+}
+
+.share-link .btn-copy {
+  padding: 10px 16px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.share-link .btn-copy:hover {
+  background: var(--primary-hover);
+}
+
+.copy-success {
+  margin-top: 8px;
+  color: #16a34a;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .share-options {
+    grid-template-columns: 1fr;
+  }
+  .share-link .link-container {
+    flex-direction: column;
+  }
+  .share-link .btn-copy {
+    width: 100%;
+  }
 }
 
 .modal-medium {
@@ -1164,12 +1586,24 @@ picture {
   min-height: 200px;
 }
 
-.calendar-month-grid,
+.calendar-month-grid {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
 .cal-grid-headers,
 .cal-grid-cells {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
+  width: 100%;
+}
+
+.cal-grid-headers {
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--border);
 }
 
 .cal-grid-headers span {
@@ -1201,8 +1635,43 @@ picture {
 
 .cal-grid-cell.no-data {
   background: #f9fafb;
+  color: #9ca3af;
   cursor: default;
 }
+
+.cal-grid-cell.no-data .cal-val {
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+/* Price tier color coding */
+.cal-grid-cell.cheapest {
+  background: #dcfce7;
+  border: 2px solid #16a34a;
+}
+
+.cal-grid-cell.cheapest .cal-val { color: #16a34a; }
+
+.cal-grid-cell.good-deal {
+  background: #dbeafe;
+  border: 2px solid #3b82f6;
+}
+
+.cal-grid-cell.good-deal .cal-val { color: #1d4ed8; }
+
+.cal-grid-cell.fair {
+  background: #fef9c3;
+  border: 2px solid #eab308;
+}
+
+.cal-grid-cell.fair .cal-val { color: #a16207; }
+
+.cal-grid-cell.expensive {
+  background: #fee2e2;
+  border: 2px solid #ef4444;
+}
+
+.cal-grid-cell.expensive .cal-val { color: #b91c1c; }
 
 .cal-grid-cell.has-price {
   cursor: pointer;
@@ -1212,25 +1681,36 @@ picture {
 .cal-grid-cell.has-price:hover {
   transform: scale(1.05);
   box-shadow: var(--shadow-hover);
+  z-index: 10;
 }
 
 .cal-grid-cell .cal-num {
   color: var(--text-secondary);
   font-size: 0.7rem;
+  margin-bottom: 4px;
 }
 
 .cal-grid-cell .cal-val {
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 1.25rem;
+  color: #111827;
+}
+
+.cal-grid-cell.no-data .cal-val {
+  font-size: 1rem;
 }
 
 @media (max-width: 640px) {
   .view-toggle { flex-wrap: wrap; }
   .calendar-date-range-row { flex-wrap: wrap; }
   .date-range-inputs { flex-direction: column; align-items: flex-start; }
-  .cal-grid-cell { min-height: 44px; font-size: 0.65rem; }
-  .cal-grid-cell .cal-val { font-size: 0.75rem; }
+  .cal-grid-cell { min-height: 44px; font-size: 0.65rem; padding: 2px; }
+  .cal-grid-cell .cal-val { font-size: 1rem; }
   .calendar-tiles { grid-template-columns: repeat(2, 1fr); }
+  .calendar-month-nav { flex-wrap: wrap; }
+  .calendar-month-nav h3 { font-size: 1rem; }
+  .calendar-legend { font-size: 0.75rem; gap: 8px 12px; }
+  .calendar-price-summary { font-size: 0.8rem; gap: 12px; }
 }
 
 .modal-subtitle {

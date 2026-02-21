@@ -99,3 +99,26 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           WORKER_ID: '4'
         run: python daily_scraper.py incremental
+
+  daily-scrape-summary:
+    runs-on: ubuntu-latest
+    needs: [scrape-worker-1, scrape-worker-2, scrape-worker-3, scrape-worker-4]
+    if: always() && !cancelled()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install psycopg2-binary python-dotenv
+
+      - name: Send scrape summary email
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ZOHO_SMTP_PASSWORD: ${{ secrets.ZOHO_SMTP_PASSWORD }}
+          ZOHO_FROM_EMAIL: ${{ vars.ZOHO_FROM_EMAIL }}
+          SCRAPE_SUMMARY_EMAIL: ${{ vars.SCRAPE_SUMMARY_EMAIL }}
+        run: python send_scrape_summary.py

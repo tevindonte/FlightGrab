@@ -401,6 +401,24 @@ class FlightDatabase:
         cursor.close()
         return [r[0] for r in rows]
 
+    def get_calendar_destinations(self, origin: str, limit: int = 200):
+        """
+        Get all destinations from an origin with their minimum price.
+        Returns: list of {code, minPrice}
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT destination, MIN(price)::float as min_price
+            FROM current_prices
+            WHERE origin = %s AND departure_date >= CURRENT_DATE AND price > 0
+            GROUP BY destination
+            ORDER BY min_price ASC
+            LIMIT %s
+        """, (origin.upper(), limit))
+        rows = cursor.fetchall()
+        cursor.close()
+        return [{"code": r[0], "minPrice": round(float(r[1]), 2)} for r in rows]
+
     def get_price_calendar(
         self, origin: str, destination: str,
         days: int = 30,

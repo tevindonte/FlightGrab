@@ -58,7 +58,11 @@ After all workers finish, a summary email is sent to `tparboosingh84@gmail.com` 
 - Distinct routes & origins
 - Flights updated today
 
-Requires `ZOHO_SMTP_PASSWORD` secret and ZeptoMail SMTP config (same as price alerts).
+**Required:** Add `ZOHO_SMTP_PASSWORD` secret in GitHub (Settings → Secrets and variables → Actions).  
+Use your Zoho ZeptoMail API key – same credentials as price alerts.  
+See [.github/GITHUB_SECRETS.md](../.github/GITHUB_SECRETS.md) for full setup.
+
+If the secret is missing, the summary step fails but stats are printed to the workflow log.
 
 ## Dependencies
 

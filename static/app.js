@@ -363,6 +363,8 @@
       ? filtered.filter(function (d) { return cardMatchesSearch(d, searchQuery); })
       : filtered;
 
+    const airportCount = filtered.length;
+    const allAirportDeals = filtered.slice();
     const bestByCity = {};
     for (let i = 0; i < filtered.length; i++) {
       const d = filtered[i];
@@ -378,13 +380,13 @@
     if (noResultsEl) noResultsEl.classList.toggle('hidden', filtered.length > 0 || deals.length === 0);
     if (filtered.length === 0 && deals.length > 0) {
       if (dealsGrid) dealsGrid.innerHTML = '';
-      updateStats([]);
+      updateStats([], 0);
       updateFilterIndicators(0);
       return;
     }
     if (filtered.length === 0) {
       if (dealsGrid) dealsGrid.innerHTML = '';
-      updateStats([]);
+      updateStats([], 0);
       updateFilterIndicators(0);
       return;
     }
@@ -419,8 +421,29 @@
           google_booking_url: deal.google_booking_url || ''
         }));
         const imgWebp = `/static/images/airports/${code}.webp`;
+        const otherRaw = allAirportDeals.filter(function (d) {
+          return getCityName(d.destination) === cityName && (d.destination || '') !== (deal.destination || '');
+        });
+        const otherByDest = {};
+        otherRaw.forEach(function (d) {
+          const code = d.destination;
+          const p = Number(d.price) || 999999;
+          if (!otherByDest[code] || p < (Number(otherByDest[code].price) || 999999)) otherByDest[code] = d;
+        });
+        const otherAirports = Object.values(otherByDest).sort(function (a, b) { return (Number(a.price) || 0) - (Number(b.price) || 0); });
+        const otherAirportsHTML = otherAirports.length > 0
+          ? '<details class="other-airports"><summary>' + otherAirports.length + ' other airport' + (otherAirports.length > 1 ? 's' : '') + '</summary><div class="airport-alternatives">' +
+            otherAirports.map(function (alt) {
+              const altOrigin = (alt.origin || currentOrigin || '').toUpperCase();
+              const altDest = (alt.destination || '').toUpperCase();
+              const altDate = alt.departure_date || '';
+              const altBookUrl = altOrigin && altDest && altDate ? API + '/api/book-redirect?origin=' + encodeURIComponent(altOrigin) + '&destination=' + encodeURIComponent(altDest) + '&date=' + encodeURIComponent(altDate) : '#';
+              return '<a class="alt-airport" href="' + escapeAttr(altBookUrl) + '" target="_blank" rel="noopener" title="Book ' + escapeHtml(altDest) + ' $' + Math.round(Number(alt.price) || 0) + '"><span class="alt-name">' + escapeHtml(alt.destination || '') + '</span><span class="alt-price">$' + Math.round(Number(alt.price) || 0) + '</span></a>';
+            }).join('') +
+            '</div></details>'
+          : '';
         return `
-        <div class="deal-card" data-destination="${code}">
+        <div class="deal-card" data-destination="${code}" data-origin="${escapeAttr(origin)}">
           <picture>
             <source srcset="${escapeAttr(imgWebp)}" type="image/webp">
             <img class="card-image" src="${imgSrc}" alt="${cityName}" loading="lazy" data-fallback="${escapeAttr(imgFallback)}" data-final-fallback="${fallbackSvg}" onerror="if(this.dataset.tried){this.src=this.dataset.finalFallback}else{this.dataset.tried=1;this.src=this.dataset.fallback}">
@@ -433,10 +456,12 @@
             <p class="flight-dates">Departs ${dateStr}</p>
             <p class="price">from $${Math.round(oneWayPrice)}</p>
             <p class="price-note">one-way</p>
+            ${otherAirportsHTML}
             <div class="card-actions">
               <a class="btn-primary" href="${escapeAttr(bookRedirectUrl)}" target="_blank" rel="noopener" title="Books via our link when available; otherwise opens Google Flights">Book Now →</a>
               <a class="btn-secondary" href="${escapeAttr(googleFlightsUrl)}" target="_blank" rel="noopener">Compare on Google</a>
               <button type="button" class="btn-alert" data-alert="${escapeAttr(JSON.stringify({ origin, destination: dest, departure_date: depDate, price: oneWayPrice }))}" title="Get notified when price drops">🔔 Set Price Alert</button>
+              <button type="button" class="btn-share" data-share="${escapeAttr(JSON.stringify({ origin, destination: dest, departure_date: depDate, price: oneWayPrice }))}" title="Share this flight">📤 Share</button>
               <button type="button" class="btn-save-flight" data-save-origin="${escapeAttr(origin)}" data-save-dest="${escapeAttr(dest)}" title="Save this route">Save</button>
               <button type="button" class="btn-calendar" data-cal-origin="${escapeAttr(origin)}" data-cal-dest="${escapeAttr(dest)}" title="See prices by date">📅 Prices by date</button>
               <button type="button" class="btn-return" data-deal="${dealJson}">+ Add return flight</button>
@@ -446,9 +471,9 @@
       `;
       }).join('');
       dealsGrid.innerHTML = html;
-      updateStats(filtered);
+      updateStats(filtered, airportCount);
       updateFilterIndicators(filtered.length);
-      populateCalendarRouteSelect(filtered);
+      updateCalendarOriginDisplay();
     } catch (err) {
       console.error('FlightGrab renderCards error:', err);
       dealsGrid.innerHTML = '<p class="error">Error displaying deals. Check console.</p>';
@@ -457,23 +482,18 @@
 
   const dealsHeading = document.getElementById('deals-heading');
 
-  function populateCalendarRouteSelect(deals) {
-    const sel = document.getElementById('calendar-route-select');
-    const hint = document.getElementById('calendar-route-hint');
-    if (!sel) return;
-    const routes = {};
-    (deals || []).forEach(function (d) {
-      const o = (d.origin || currentOrigin || '').toUpperCase();
-      const dest = (d.destination || '').toUpperCase();
-      if (o && dest) routes[o + '|' + dest] = { origin: o, destination: dest };
-    });
-    const keys = Object.keys(routes).sort();
-    sel.innerHTML = '<option value="">Select a route…</option>' + keys.map(function (k) {
-      const r = routes[k];
-      const label = getCityName(r.origin) + ' (' + r.origin + ') → ' + getCityName(r.destination) + ' (' + r.destination + ')';
-      return '<option value="' + escapeAttr(k) + '">' + escapeHtml(label) + '</option>';
-    }).join('');
-    if (hint) hint.classList.toggle('hidden', keys.length > 0);
+  function updateCalendarOriginDisplay() {
+    const valEl = document.getElementById('calendar-origin-value');
+    const hintEl = document.getElementById('calendar-origin-hint');
+    if (!valEl) return;
+    const origin = (originSelect && originSelect.value) || currentOrigin || 'ALL';
+    if (origin === 'ALL' || !origin) {
+      valEl.textContent = '—';
+      if (hintEl) hintEl.classList.remove('hidden');
+    } else {
+      valEl.textContent = getCityName(origin) + ' (' + origin + ')';
+      if (hintEl) hintEl.classList.add('hidden');
+    }
   }
 
   function getPeriod() {
@@ -481,11 +501,21 @@
     return range ? range.value : 'week';
   }
 
-  function updateStats(deals) {
+  function updateStats(deals, airportCount) {
     const countEl = document.getElementById('deal-count');
+    const countLabel = document.getElementById('deal-count-label');
     const priceEl = document.getElementById('cheapest-price');
     const updateEl = document.getElementById('last-update');
-    if (countEl) countEl.textContent = deals.length;
+    if (countEl) {
+      countEl.textContent = deals.length;
+      if (countLabel) {
+        if (airportCount != null && airportCount > 0 && airportCount !== deals.length) {
+          countLabel.textContent = ' cities · ' + airportCount + ' airports';
+        } else {
+          countLabel.textContent = ' destinations';
+        }
+      }
+    }
     if (priceEl) {
       if (deals.length === 0) {
         priceEl.textContent = '—';
@@ -586,6 +616,7 @@
       }
       allDeals = data.deals || [];
       renderCards(allDeals, searchInput ? searchInput.value.trim() : '', currentMode);
+      handleSharedLink();
     } catch (e) {
       setError(e.message || 'Failed to load deals');
       allDeals = [];
@@ -626,6 +657,8 @@
     if (originInput) originInput.value = label || (value === 'ALL' ? ALL_AIRPORTS_OPTION.label : getCityName(value) + ' (' + value + ')');
     if (originListbox) { originListbox.classList.add('hidden'); originListbox.innerHTML = ''; }
     if (originCombobox) originCombobox.setAttribute('aria-expanded', 'false');
+    calendarDestinationsOrigin = null;
+    updateCalendarOriginDisplay();
     fetchDeals(value);
   }
 
@@ -772,14 +805,42 @@
     );
   }
 
+  function handleSharedLink() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const from = (params.get('from') || '').toUpperCase();
+      const to = (params.get('to') || '').toUpperCase();
+      if (!from || !to) return;
+      const cards = document.querySelectorAll('.deal-card');
+      let card = null;
+      for (let i = 0; i < cards.length; i++) {
+        if (cards[i].dataset.origin === from && cards[i].dataset.destination === to) {
+          card = cards[i];
+          break;
+        }
+      }
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('shared-highlight');
+        setTimeout(function () { card.classList.remove('shared-highlight'); }, 3000);
+      }
+      if (history.replaceState) history.replaceState({}, '', window.location.pathname || '/');
+    } catch (e) {}
+  }
+
   async function loadAirports() {
     try {
       const res = await fetch(`${API}/api/airports?with_data=true`);
       const data = await res.json();
-      airports = Array.isArray(data.airports) && data.airports.length > 0
-        ? data.airports
-        : FALLBACK_ORIGINS;
-      setOrigin('ALL', ALL_AIRPORTS_OPTION.label);
+      airports = Array.isArray(data.airports) && data.airports.length > 0 ? data.airports : FALLBACK_ORIGINS;
+      const params = new URLSearchParams(window.location.search);
+      const from = params.get('from');
+      const to = params.get('to');
+      if (from && to && airports.indexOf(from.toUpperCase()) !== -1) {
+        setOrigin(from.toUpperCase(), getCityName(from.toUpperCase()) + ' (' + from.toUpperCase() + ')');
+      } else {
+        setOrigin('ALL', ALL_AIRPORTS_OPTION.label);
+      }
       renderOriginListbox(originInput ? originInput.value : '', false);
     } catch (e) {
       airports = FALLBACK_ORIGINS;
@@ -904,33 +965,146 @@
     document.querySelectorAll('.view-btn').forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
     const btn = document.getElementById('view-calendar');
     if (btn) { btn.classList.add('active'); btn.setAttribute('aria-pressed', 'true'); }
+    updateCalendarOriginDisplay();
   });
-  document.getElementById('calendar-route-select')?.addEventListener('change', function () {
-    const val = this.value;
-    if (!val) { document.getElementById('main-calendar-content').innerHTML = ''; return; }
-    const parts = val.split('|');
-    if (parts.length !== 2) return;
-    const origin = parts[0];
-    const destination = parts[1];
+  let mainCalendarState = null;
+
+  function loadMainCalendar(origin, destination, year, month) {
     const content = document.getElementById('main-calendar-content');
+    if (!content) return;
+    const firstDay = year + '-' + String(month).padStart(2, '0') + '-01';
+    const lastDay = new Date(year, month, 0);
+    const dateTo = lastDay.getFullYear() + '-' + String(lastDay.getMonth() + 1).padStart(2, '0') + '-' + String(lastDay.getDate()).padStart(2, '0');
     content.innerHTML = '<p class="calendar-loading">Loading…</p>';
-    fetch(`${API}/api/price-calendar?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&days=30`)
+    fetch(`${API}/api/price-calendar?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date_from=${encodeURIComponent(firstDay)}&date_to=${encodeURIComponent(dateTo)}`)
       .then(function (r) { return r.json(); })
       .then(function (data) {
         const dates = data.dates || [];
+        mainCalendarState = { origin, destination, year, month };
         if (dates.length === 0) {
-          content.innerHTML = '<p class="calendar-empty">No price data for this route.</p>';
+          content.innerHTML = '<p class="calendar-empty">No price data for this route in ' + new Date(year, month - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' }) + '.</p>';
           return;
         }
         calendarModalData = { origin, destination, dates, dateFrom: '', dateTo: '' };
-        const grid = document.createElement('div');
-        grid.className = 'calendar-grid';
-        content.innerHTML = '';
-        content.appendChild(grid);
-        renderCalendarGrid(dates, origin, destination, grid, null);
+        renderMainCalendarView(dates, origin, destination, year, month, content);
       })
       .catch(function () { content.innerHTML = '<p class="calendar-error">Failed to load.</p>'; });
-  });
+  }
+
+  function renderMainCalendarView(dates, origin, destination, year, month, content) {
+    const prices = dates.map(function (d) { return d.price; });
+    const minPrice = Math.min.apply(null, prices);
+    const maxPrice = Math.max.apply(null, prices);
+    const avgPrice = prices.length ? Math.round(prices.reduce(function (a, b) { return a + b; }, 0) / prices.length) : 0;
+    const monthName = new Date(year, month - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    const prevMonth = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
+    const nextMonth = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
+    const prevLabel = new Date(prevMonth.y, prevMonth.m - 1).toLocaleString('en-US', { month: 'short' });
+    const nextLabel = new Date(nextMonth.y, nextMonth.m - 1).toLocaleString('en-US', { month: 'short' });
+    content.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'calendar-view-wrapper';
+    wrapper.innerHTML = '<div class="calendar-month-nav"><button type="button" class="btn-cal-prev" aria-label="Previous month">← ' + prevLabel + '</button><h3>' + monthName + '</h3><button type="button" class="btn-cal-next" aria-label="Next month">' + nextLabel + ' →</button></div>' +
+      '<div class="calendar-price-summary"><span>Cheapest: <strong>$' + Math.round(minPrice) + '</strong></span><span>Average: <strong>$' + avgPrice + '</strong></span><span>Highest: <strong>$' + Math.round(maxPrice) + '</strong></span></div>' +
+      '<div class="calendar-legend"><span class="legend-item"><span class="color-box cheapest"></span> Best Deal</span><span class="legend-item"><span class="color-box good-deal"></span> Good</span><span class="legend-item"><span class="color-box fair"></span> Fair</span><span class="legend-item"><span class="color-box expensive"></span> High</span></div>';
+    const grid = document.createElement('div');
+    grid.className = 'calendar-grid';
+    wrapper.appendChild(grid);
+    content.appendChild(wrapper);
+    renderCalendarGrid(dates, origin, destination, grid, null);
+    wrapper.querySelector('.btn-cal-prev').addEventListener('click', function () {
+      loadMainCalendar(origin, destination, prevMonth.y, prevMonth.m);
+    });
+    wrapper.querySelector('.btn-cal-next').addEventListener('click', function () {
+      loadMainCalendar(origin, destination, nextMonth.y, nextMonth.m);
+    });
+  }
+
+  let calendarDestinationsCache = null;
+  let calendarDestinationsOrigin = null;
+
+  function fetchCalendarDestinations(origin) {
+    if (calendarDestinationsOrigin === origin && calendarDestinationsCache) return Promise.resolve(calendarDestinationsCache);
+    return fetch(`${API}/api/calendar/destinations?origin=${encodeURIComponent(origin)}`)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        const dests = (data.destinations || []).map(function (d) {
+          return { code: d.code, minPrice: d.minPrice, label: getCityName(d.code) + ' (' + d.code + ')' };
+        });
+        calendarDestinationsCache = dests;
+        calendarDestinationsOrigin = origin;
+        return dests;
+      })
+      .catch(function () { return []; });
+  }
+
+  function showDestResults(dests, query, wrapper) {
+    const q = (query || '').toLowerCase().trim();
+    let filtered = dests;
+    if (q.length >= 2) {
+      filtered = dests.filter(function (d) {
+        return d.label.toLowerCase().includes(q) || d.code.toLowerCase().includes(q);
+      });
+    }
+    const limit = 12;
+    const top = filtered.slice(0, limit);
+    const hasSection = q.length < 2 && top.length > 0;
+    let html = hasSection ? '<div class="dest-section-label">Popular</div>' : '';
+    html += top.map(function (d) {
+      return '<div class="dest-result-item" role="option" data-dest="' + escapeAttr(d.code) + '" tabindex="-1">' +
+        '<span class="dest-name">' + escapeHtml(d.label) + '</span>' +
+        '<span class="dest-price">from $' + Math.round(d.minPrice) + '</span></div>';
+    }).join('');
+    if (top.length === 0) html += '<div class="dest-result-item dest-no-results">No destinations found</div>';
+    wrapper.innerHTML = html;
+    wrapper.classList.remove('hidden');
+    wrapper.querySelectorAll('.dest-result-item[data-dest]').forEach(function (el) {
+      el.addEventListener('click', function () { selectCalendarDest(el.dataset.dest); });
+    });
+  }
+
+  function selectCalendarDest(destCode) {
+    const input = document.getElementById('calendar-dest-input');
+    const results = document.getElementById('calendar-dest-results');
+    const origin = (originSelect && originSelect.value) || currentOrigin;
+    if (!origin || origin === 'ALL') return;
+    if (input) input.value = getCityName(destCode) + ' (' + destCode + ')';
+    if (results) results.classList.add('hidden');
+    const now = new Date();
+    loadMainCalendar(origin, destCode, now.getFullYear(), now.getMonth() + 1);
+  }
+
+  const calendarDestInput = document.getElementById('calendar-dest-input');
+  const calendarDestResults = document.getElementById('calendar-dest-results');
+  if (calendarDestInput && calendarDestResults) {
+    let debounceTimer = null;
+    calendarDestInput.addEventListener('focus', function () {
+      const origin = (originSelect && originSelect.value) || currentOrigin;
+      if (!origin || origin === 'ALL') return;
+      fetchCalendarDestinations(origin).then(function (dests) {
+        showDestResults(dests, calendarDestInput.value, calendarDestResults);
+      });
+    });
+    calendarDestInput.addEventListener('input', function () {
+      const origin = (originSelect && originSelect.value) || currentOrigin;
+      if (!origin || origin === 'ALL') { calendarDestResults.classList.add('hidden'); return; }
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function () {
+        fetchCalendarDestinations(origin).then(function (dests) {
+          showDestResults(dests, calendarDestInput.value, calendarDestResults);
+        });
+      }, 150);
+    });
+    calendarDestInput.addEventListener('blur', function () {
+      setTimeout(function () { if (calendarDestResults) calendarDestResults.classList.add('hidden'); }, 200);
+    });
+    calendarDestInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        const first = calendarDestResults.querySelector('.dest-result-item[data-dest]');
+        if (first) { selectCalendarDest(first.dataset.dest); e.preventDefault(); }
+      }
+    });
+  }
 
   document.getElementById('btn-save-dates')?.addEventListener('click', async function () {
     const fromVal = dateFromEl && dateFromEl.value;
@@ -1146,6 +1320,16 @@
           const data = JSON.parse(alertBtn.dataset.alert || '{}');
           window.openAlertModal && openAlertModal(data);
         } catch (err) {}
+        return;
+      }
+      const shareBtn = e.target.closest('.btn-share');
+      if (shareBtn) {
+        e.preventDefault();
+        try {
+          const data = JSON.parse(shareBtn.dataset.share || '{}');
+          window.openShareModal && openShareModal(data);
+        } catch (err) {}
+        return;
       }
       const saveBtn = e.target.closest('.btn-save-flight');
       if (saveBtn && !saveBtn.disabled) {
@@ -1222,7 +1406,7 @@
         const bookUrl = `${API}/api/book-redirect?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(dateStr)}`;
         html += '<div class="cal-grid-cell has-price ' + priceClass + '" data-date="' + escapeAttr(dateStr) + '" data-price="' + info.price + '" data-book="' + escapeAttr(bookUrl) + '"><span class="cal-num">' + cur.getDate() + '</span><span class="cal-val">$' + Math.round(info.price) + '</span></div>';
       } else {
-        html += '<div class="cal-grid-cell no-data"><span class="cal-num">' + cur.getDate() + '</span></div>';
+        html += '<div class="cal-grid-cell no-data"><span class="cal-num">' + cur.getDate() + '</span><span class="cal-val">—</span></div>';
       }
       cur.setDate(cur.getDate() + 1);
     }
@@ -1463,6 +1647,74 @@
 
   document.getElementById('alert-modal')?.querySelector('.modal-backdrop')?.addEventListener('click', closeAlertModal);
   document.getElementById('alert-modal')?.querySelector('.modal-close')?.addEventListener('click', closeAlertModal);
+
+  let currentShareData = null;
+
+  function generateShareUrl(origin, destination, date) {
+    const base = (typeof window !== 'undefined' && window.location && window.location.origin) || 'https://flightgrab.cc';
+    try {
+      const u = new URL('/', base);
+      u.searchParams.set('from', origin);
+      u.searchParams.set('to', destination);
+      u.searchParams.set('date', date || '');
+      return u.toString();
+    } catch (e) {
+      return base + '/?from=' + encodeURIComponent(origin) + '&to=' + encodeURIComponent(destination) + '&date=' + encodeURIComponent(date || '');
+    }
+  }
+
+  window.openShareModal = function (data) {
+    if (!data || !data.origin || !data.destination) return;
+    currentShareData = data;
+    const routeEl = document.getElementById('share-route');
+    const priceEl = document.getElementById('share-price');
+    const dateEl = document.getElementById('share-date');
+    const urlInput = document.getElementById('share-url-input');
+    const copySuccess = document.getElementById('copy-success');
+    if (routeEl) routeEl.textContent = data.origin + ' → ' + data.destination;
+    if (priceEl) priceEl.textContent = '$' + Math.round(data.price || 0);
+    if (dateEl) dateEl.textContent = 'Departs ' + (formatDate(data.departure_date) || '—');
+    const shareUrl = generateShareUrl(data.origin, data.destination, data.departure_date || '');
+    if (urlInput) urlInput.value = shareUrl;
+    if (copySuccess) copySuccess.classList.add('hidden');
+    const fbBtn = document.querySelector('.share-facebook');
+    const twBtn = document.querySelector('.share-twitter');
+    const waBtn = document.querySelector('.share-whatsapp');
+    const emBtn = document.querySelector('.share-email');
+    const text = '✈️ Found a deal! ' + data.origin + ' → ' + data.destination + ' for only $' + Math.round(data.price || 0);
+    if (fbBtn) fbBtn.href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl) + '&quote=' + encodeURIComponent(text);
+    if (twBtn) twBtn.href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent('✈️ Found a deal on FlightGrab! ' + data.origin + ' → ' + data.destination + ' for only $' + Math.round(data.price || 0) + ' 🎉') + '&url=' + encodeURIComponent(shareUrl);
+    if (waBtn) waBtn.href = 'https://wa.me/?text=' + encodeURIComponent(text + '\n' + shareUrl);
+    if (emBtn) {
+      emBtn.href = 'mailto:?subject=' + encodeURIComponent('✈️ Flight Deal: ' + data.origin + ' → ' + data.destination + ' for $' + Math.round(data.price || 0)) + '&body=' + encodeURIComponent('Hey!\n\nI found this flight deal on FlightGrab:\n\n' + data.origin + ' → ' + data.destination + '\nPrice: $' + Math.round(data.price || 0) + ' (one-way)\nDate: ' + (formatDate(data.departure_date) || '') + '\n\nCheck it out: ' + shareUrl + '\n\nHappy travels! ✈️');
+    }
+    const modal = document.getElementById('share-modal');
+    if (modal) { modal.classList.remove('hidden'); modal.setAttribute('aria-hidden', 'false'); }
+  };
+
+  window.closeShareModal = function () {
+    const modal = document.getElementById('share-modal');
+    if (modal) { modal.classList.add('hidden'); modal.setAttribute('aria-hidden', 'true'); }
+    document.getElementById('copy-success')?.classList.add('hidden');
+  };
+
+  document.getElementById('btn-copy-share')?.addEventListener('click', function () {
+    const input = document.getElementById('share-url-input');
+    if (!input) return;
+    input.select();
+    input.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(input.value).then(function () {
+      const success = document.getElementById('copy-success');
+      const btn = document.getElementById('btn-copy-share');
+      if (success) { success.classList.remove('hidden'); success.textContent = '✓ Link copied!'; }
+      if (btn) { var t = btn.textContent; btn.textContent = 'Copied!'; setTimeout(function () { btn.textContent = t; }, 2000); }
+      setTimeout(function () { document.getElementById('copy-success')?.classList.add('hidden'); }, 2000);
+    }).catch(function () { alert('Press Ctrl+C (or Cmd+C) to copy the link'); });
+  });
+
+  document.getElementById('share-modal')?.querySelector('.modal-backdrop')?.addEventListener('click', closeShareModal);
+  document.getElementById('share-modal')?.querySelector('.modal-close')?.addEventListener('click', closeShareModal);
+  document.getElementById('share-modal')?.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeShareModal(); });
 
   [document.getElementById('my-alerts-modal'), document.getElementById('saved-flights-modal')].forEach(function (m) {
     if (!m) return;

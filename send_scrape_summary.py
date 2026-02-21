@@ -25,7 +25,7 @@ def _send_email_smtp(to_email: str, subject: str, html_body: str) -> bool:
         print("ZOHO_SMTP_PASSWORD not set")
         return False
 
-    from_addr = os.getenv("ZOHO_FROM_EMAIL", "noreply@flightgrab.cc")
+    from_addr = (os.getenv("ZOHO_FROM_EMAIL") or "noreply@flightgrab.cc").strip() or "noreply@flightgrab.cc"
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = from_addr
@@ -57,6 +57,8 @@ def main():
     from db_manager import FlightDatabase
 
     to_email = (os.getenv("SCRAPE_SUMMARY_EMAIL") or "tparboosingh84@gmail.com").strip()
+    if not to_email:
+        to_email = "tparboosingh84@gmail.com"
 
     db = FlightDatabase()
     db.connect()
@@ -80,6 +82,16 @@ def main():
     db.close()
 
     today = date.today().isoformat()
+
+    # Always print summary to workflow log (visible in GitHub Actions)
+    print("=" * 50)
+    print("SCRAPE SUMMARY")
+    print("=" * 50)
+    print(f"Total flight options (future): {total_flights:,}")
+    print(f"Routes: {total_routes:,} · Origins: {distinct_origins}")
+    print(f"Updated today: {updated_today:,} flights")
+    print("=" * 50)
+
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -103,9 +115,15 @@ def main():
 
     subject = f"✈️ FlightGrab: {total_flights:,} flights populated ({today})"
     if _send_email_smtp(to_email, subject, html):
-        print(f"✓ Summary sent to {to_email}")
+        print(f"✓ Summary email sent to {to_email}")
     else:
-        print("✗ Failed to send summary email")
+        print("")
+        print("⚠ EMAIL NOT SENT - ZOHO_SMTP_PASSWORD not configured")
+        print("  To receive scrape summary emails, add this secret in GitHub:")
+        print("  Repository → Settings → Secrets and variables → Actions")
+        print("  → New repository secret: ZOHO_SMTP_PASSWORD")
+        print("  (Use your Zoho ZeptoMail API key - same as price alerts)")
+        print("")
         sys.exit(1)
 
 

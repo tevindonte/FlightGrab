@@ -55,14 +55,21 @@
       </div>
     </div>
     <div id="calendar-view-container" class="calendar-view-container hidden">
-      <p class="calendar-view-hint">Select your origin above, then pick a route below to see prices by date.</p>
-      <div class="calendar-view-header">
-        <label for="calendar-route-select">Route:</label>
-        <select id="calendar-route-select" aria-label="Select route for calendar">
-          <option value="">Select a route…</option>
-        </select>
+      <p class="calendar-view-hint">Select your origin above, then choose a destination below to see prices by date.</p>
+      <div class="calendar-route-selector">
+        <div class="calendar-origin-display">
+          <span class="label">From:</span>
+          <span id="calendar-origin-value" class="value">—</span>
+        </div>
+        <div class="calendar-destination-selector">
+          <label for="calendar-dest-input">To:</label>
+          <div class="dest-search-wrapper">
+            <input type="text" id="calendar-dest-input" placeholder="Search destinations…" autocomplete="off" aria-label="Search destinations">
+            <div id="calendar-dest-results" class="autocomplete-results hidden" role="listbox"></div>
+          </div>
+        </div>
+        <p id="calendar-origin-hint" class="calendar-route-hint hidden">Select a specific airport above (not All Airports) to see destinations.</p>
       </div>
-      <p id="calendar-route-hint" class="calendar-route-hint hidden">Load deals in List view first, then pick a route here.</p>
       <div class="calendar-filters-note">Filters and sort apply to List view. Switch back to List to refine results.</div>
       <div id="main-calendar-content" class="main-calendar-content"></div>
     </div>
@@ -70,7 +77,7 @@
     <div class="results-header">
       <h2 id="deals-heading" class="deals-heading">Cheapest Flights This Week</h2>
       <div class="stats" id="stats" aria-live="polite">
-        <span class="stat"><strong id="deal-count">0</strong> destinations</span>
+        <span class="stat" title="We show the cheapest airport per city. Some cities have multiple airports."><strong id="deal-count">0</strong><span id="deal-count-label"> destinations</span></span>
         <span class="stat">Starting from <strong id="cheapest-price">—</strong></span>
         <span class="stat">Updated <strong id="last-update">—</strong></span>
       </div>
@@ -293,6 +300,36 @@
         <button type="submit" class="btn-primary btn-full">Set Alert</button>
       </form>
       <p class="alert-note">📧 We'll email you when the price drops below your target.</p>
+    </div>
+  </div>
+
+  <div id="share-modal" class="modal hidden" role="dialog" aria-labelledby="share-modal-title" aria-modal="true" aria-hidden="true">
+    <div class="modal-backdrop" onclick="window.closeShareModal && closeShareModal()"></div>
+    <div class="modal-content modal-small">
+      <button type="button" class="modal-close" onclick="window.closeShareModal && closeShareModal()" aria-label="Close">&times;</button>
+      <h2 id="share-modal-title" class="modal-title">Share this flight</h2>
+      <div class="flight-preview-share">
+        <div class="share-route" id="share-route">ATL → MIA</div>
+        <div class="share-price-display">
+          <span class="share-price" id="share-price">$25</span>
+          <span class="share-label">one-way</span>
+        </div>
+        <div class="share-date" id="share-date">Departs Mar 4, 2026</div>
+      </div>
+      <div class="share-options">
+        <a class="share-btn share-facebook" href="#" target="_blank" rel="noopener" title="Share on Facebook">Facebook</a>
+        <a class="share-btn share-twitter" href="#" target="_blank" rel="noopener" title="Share on X">X (Twitter)</a>
+        <a class="share-btn share-whatsapp" href="#" target="_blank" rel="noopener" title="Share on WhatsApp">WhatsApp</a>
+        <a class="share-btn share-email" href="#" title="Share via email">Email</a>
+      </div>
+      <div class="share-link">
+        <label for="share-url-input">Or copy link:</label>
+        <div class="link-container">
+          <input type="text" id="share-url-input" readonly>
+          <button type="button" class="btn-copy" id="btn-copy-share">Copy</button>
+        </div>
+        <p class="copy-success hidden" id="copy-success">Link copied!</p>
+      </div>
     </div>
   </div>
 

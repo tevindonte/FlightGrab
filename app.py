@@ -150,6 +150,21 @@ async def get_all_deals(
         db.close()
 
 
+@app.get("/api/calendar/destinations")
+async def get_calendar_destinations(
+    origin: str = Query(..., min_length=3, max_length=3),
+    limit: int = Query(200, ge=10, le=500),
+):
+    """Get all destinations from an origin with minimum price. For calendar destination search."""
+    origin = origin.upper()
+    db = get_db()
+    try:
+        destinations = db.get_calendar_destinations(origin, limit=limit)
+        return {"origin": origin, "destinations": destinations}
+    finally:
+        db.close()
+
+
 @app.get("/api/price-calendar")
 async def get_price_calendar(
     origin: str = Query(..., min_length=3, max_length=3),
