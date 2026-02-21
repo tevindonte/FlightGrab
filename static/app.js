@@ -604,7 +604,7 @@
     }));
   }
 
-  function renderOriginListbox(filter) {
+  function renderOriginListbox(filter, show) {
     const options = buildOriginOptions();
     const q = (filter || '').toLowerCase().trim();
     const filtered = q
@@ -616,8 +616,9 @@
     originListbox.innerHTML = filtered.map(function (o) {
       return '<li role="option" data-value="' + escapeAttr(o.value) + '">' + escapeHtml(o.label) + '</li>';
     }).join('');
-    originListbox.classList.toggle('hidden', filtered.length === 0);
-    if (originCombobox) originCombobox.setAttribute('aria-expanded', filtered.length > 0);
+    const shouldShow = show !== false && filtered.length > 0;
+    originListbox.classList.toggle('hidden', !shouldShow);
+    if (originCombobox) originCombobox.setAttribute('aria-expanded', shouldShow);
   }
 
   function setOrigin(value, label) {
@@ -779,11 +780,11 @@
         ? data.airports
         : FALLBACK_ORIGINS;
       setOrigin('ALL', ALL_AIRPORTS_OPTION.label);
-      renderOriginListbox();
+      renderOriginListbox(originInput ? originInput.value : '', false);
     } catch (e) {
       airports = FALLBACK_ORIGINS;
       setOrigin('ALL', ALL_AIRPORTS_OPTION.label);
-      renderOriginListbox();
+      renderOriginListbox(originInput ? originInput.value : '', false);
     }
   }
 
@@ -793,8 +794,11 @@
   }
 
   if (originInput && originListbox) {
-    originInput.addEventListener('focus', function () { renderOriginListbox(originInput.value); });
-    originInput.addEventListener('input', function () { renderOriginListbox(originInput.value); });
+    originInput.addEventListener('focus', function () {
+      originInput.select();
+      renderOriginListbox(originInput.value, true);
+    });
+    originInput.addEventListener('input', function () { renderOriginListbox(originInput.value, true); });
     originInput.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         originListbox.classList.add('hidden');
