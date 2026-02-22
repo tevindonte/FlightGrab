@@ -129,7 +129,7 @@ class FlightDatabase:
 
         self.conn.commit()
         cursor.close()
-        print("✓ Tables created")
+        print("Tables created")
 
     def insert_flights(self, flights):
         """
@@ -187,7 +187,7 @@ class FlightDatabase:
         execute_batch(cursor, query, values)
         self.conn.commit()
         cursor.close()
-        print(f"✓ Inserted/updated {len(flights)} flights")
+        print(f"Inserted/updated {len(flights)} flights")
 
     def create_daily_snapshot(self):
         """Snapshot current prices by route (min/avg/count) for today's date."""
@@ -210,7 +210,7 @@ class FlightDatabase:
         """)
         self.conn.commit()
         cursor.close()
-        print("✓ Created daily snapshot")
+        print("Created daily snapshot")
 
     def cleanup_old_data(self):
         """Remove flights that have already departed (rolling 30-day window)."""
@@ -226,7 +226,7 @@ class FlightDatabase:
         """)
         self.conn.commit()
         cursor.close()
-        print(f"✓ Cleaned up {deleted} departed flights")
+        print(f"Cleaned up {deleted} departed flights")
 
     def get_cheapest_from_origin(self, origin, time_filter='today', client_date=None, specific_date=None, date_from=None, date_to=None):
         """
@@ -790,5 +790,5 @@ if __name__ == "__main__":
     db = FlightDatabase()
     db.connect()
     db.create_tables()
-    print("✓ Database ready")
+    print("Database ready")
     db.close()
