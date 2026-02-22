@@ -1341,6 +1341,70 @@
     closeReturnModal();
   });
 
+  function showBookingLoader() {
+    const loader = document.getElementById('booking-loader');
+    const progressBar = document.getElementById('progress-bar');
+    const title = document.getElementById('loader-title');
+    const subtitle = document.getElementById('loader-subtitle');
+    if (!loader || !progressBar) return;
+    loader.style.display = 'flex';
+    progressBar.style.width = '0%';
+    if (title) title.textContent = 'Finding the best price...';
+    if (subtitle) subtitle.textContent = 'This usually takes 5-10 seconds';
+    let progress = 0;
+    const iv = setInterval(function () {
+      progress += Math.random() * 12;
+      if (progress > 90) progress = 90;
+      progressBar.style.width = progress + '%';
+    }, 400);
+    loader.dataset.progressInterval = String(iv);
+    setTimeout(function () {
+      if (title) title.textContent = 'Securing best rate...';
+    }, 3000);
+    setTimeout(function () {
+      if (title) title.textContent = 'Almost there...';
+      if (subtitle) subtitle.textContent = 'Redirecting you to booking page';
+    }, 7000);
+  }
+
+  function hideBookingLoader() {
+    const loader = document.getElementById('booking-loader');
+    const progressBar = document.getElementById('progress-bar');
+    if (loader && loader.dataset.progressInterval) {
+      clearInterval(parseInt(loader.dataset.progressInterval, 10));
+      loader.dataset.progressInterval = '';
+    }
+    if (progressBar) progressBar.style.width = '100%';
+    if (loader) {
+      setTimeout(function () {
+        loader.style.display = 'none';
+        if (progressBar) progressBar.style.width = '0%';
+      }, 300);
+    }
+  }
+
+  document.addEventListener('click', function (e) {
+    const link = e.target.closest('a[href*="book-redirect"]');
+    if (!link || !link.href || link.href.indexOf('book-redirect') === -1) return;
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const url = link.href;
+    const fetchUrl = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'format=json';
+    showBookingLoader();
+    fetch(fetchUrl)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        hideBookingLoader();
+        if (data && data.url) window.location.href = data.url;
+        else window.location.href = url;
+      })
+      .catch(function () {
+        hideBookingLoader();
+        window.location.href = url;
+      });
+  }, true);
+
   if (dealsGrid) {
     dealsGrid.addEventListener('click', function (e) {
       const returnBtn = e.target.closest('.btn-return');

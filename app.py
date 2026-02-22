@@ -6,7 +6,7 @@ import os
 import urllib.parse
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Header, Body
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
@@ -268,6 +268,7 @@ async def book_redirect(
     origin: str = Query(..., min_length=3, max_length=3),
     destination: str = Query(..., min_length=3, max_length=3),
     date: str = Query(..., description="Departure date YYYY-MM-DD"),
+    format: str = Query(None, description="If 'json', return URL in JSON instead of redirect"),
 ):
     """
     Generate fresh OTA booking link by simulating Continue click on Google Flights.
@@ -297,66 +298,73 @@ async def book_redirect(
     finally:
         db.close()
 
+    final_url = None
+
     # Pre-extracted airline URL (from batch refresh): instant redirect, no Cloud Run needed
     if booking_url and "google.com" not in (booking_url or "").lower():
-        return RedirectResponse(url=booking_url)
+        final_url = booking_url
+    else:
+        fallback = (
+            "https://www.google.com/travel/flights?q="
+            + urllib.parse.quote(f"One way flights from {origin} to {destination} on {date}")
+        )
 
-    fallback = (
-        "https://www.google.com/travel/flights?q="
-        + urllib.parse.quote(f"One way flights from {origin} to {destination} on {date}")
-    )
+        # For extract-from-search, use tfs (protobuf) URL - it works; simple ?q= often fails "Did not reach booking page"
+        search_url = fallback
+        if not google_booking_url:
+            try:
+                import sys
+                from pathlib import Path
+                rev_path = Path(__file__).parent / "reverse_engineering_scraping"
+                if str(rev_path) not in sys.path:
+                    sys.path.insert(0, str(rev_path.parent))
+                from reverse_engineering_scraping.tfs_encoder import build_flights_url_from_iata
+                search_url = build_flights_url_from_iata(
+                    slices_iata=[(date, origin, destination)],
+                    adults=1, cabin="economy", trip_type="one_way", sort="cheapest",
+                )
+            except Exception:
+                pass
 
-    # For extract-from-search, use tfs (protobuf) URL - it works; simple ?q= often fails "Did not reach booking page"
-    search_url = fallback
-    if not google_booking_url:
-        try:
-            import sys
-            from pathlib import Path
-            rev_path = Path(__file__).parent / "reverse_engineering_scraping"
-            if str(rev_path) not in sys.path:
-                sys.path.insert(0, str(rev_path.parent))
-            from reverse_engineering_scraping.tfs_encoder import build_flights_url_from_iata
-            search_url = build_flights_url_from_iata(
-                slices_iata=[(date, origin, destination)],
-                adults=1, cabin="economy", trip_type="one_way", sort="cheapest",
-            )
-        except Exception:
-            pass
+        cloud_run_url = (os.getenv("CLOUD_RUN_URL") or os.getenv("LINK_EXTRACTOR_URL") or "").strip().rstrip("/")
 
-    cloud_run_url = (os.getenv("CLOUD_RUN_URL") or os.getenv("LINK_EXTRACTOR_URL") or "").strip().rstrip("/")
+        # Cloud Run: /extract for booking URL (fast), /extract-from-search when we only have search URL (slower but gets airline).
+        if cloud_run_url:
+            endpoint = "/extract-from-search" if not google_booking_url else "/extract"
+            url_param = search_url if not google_booking_url else google_booking_url
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=55.0) as client:
+                    resp = await client.get(f"{cloud_run_url}{endpoint}", params={"url": url_param})
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if data.get("success") and data.get("url"):
+                            final_url = data["url"]
+            except Exception:
+                pass
 
-    # Cloud Run: /extract for booking URL (fast), /extract-from-search when we only have search URL (slower but gets airline).
-    if cloud_run_url:
-        endpoint = "/extract-from-search" if not google_booking_url else "/extract"
-        url_param = search_url if not google_booking_url else google_booking_url
-        try:
-            import httpx
-            async with httpx.AsyncClient(timeout=55.0) as client:
-                resp = await client.get(f"{cloud_run_url}{endpoint}", params={"url": url_param})
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if data.get("success") and data.get("url"):
-                        return RedirectResponse(url=data["url"])
-        except Exception:
-            pass
+        if not final_url and google_booking_url:
+            try:
+                from booking_link_generator import get_generator
 
-    # Fallback: local Playwright (only works if we have booking URL; fails on Render)
-    if google_booking_url:
-        try:
-            from booking_link_generator import get_generator
+                generator = await get_generator()
+                fresh_link = await generator.get_fresh_booking_link(google_booking_url, timeout_ms=25000)
+                if fresh_link:
+                    final_url = fresh_link
+            except ImportError:
+                pass
+            except Exception:
+                pass
 
-            generator = await get_generator()
-            fresh_link = await generator.get_fresh_booking_link(google_booking_url, timeout_ms=25000)
-            if fresh_link:
-                return RedirectResponse(url=fresh_link)
-        except ImportError:
-            pass
-        except Exception:
-            pass
+            if not final_url:
+                final_url = google_booking_url
 
-        return RedirectResponse(url=google_booking_url)
+        if not final_url:
+            final_url = fallback
 
-    return RedirectResponse(url=fallback)
+    if format == "json":
+        return JSONResponse(content={"url": final_url})
+    return RedirectResponse(url=final_url)
 
 
 @app.post("/api/alerts/subscribe")

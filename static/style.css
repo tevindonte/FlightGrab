@@ -2013,3 +2013,104 @@ picture {
 .footer a:hover {
   color: var(--primary);
 }
+
+/* Booking loader overlay */
+.booking-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.booking-loader .loader-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+}
+
+.booking-loader .loader-content {
+  position: relative;
+  background: white;
+  padding: 40px;
+  border-radius: 16px;
+  text-align: center;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: loaderSlideIn 0.3s ease;
+}
+
+@keyframes loaderSlideIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.booking-loader .spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid #f3f4f6;
+  border-top-color: var(--primary, #1a73e8);
+  border-radius: 50%;
+  animation: loaderSpin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes loaderSpin {
+  to { transform: rotate(360deg); }
+}
+
+.booking-loader #loader-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.booking-loader #loader-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0 0 20px;
+}
+
+.booking-loader .loader-progress {
+  width: 100%;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.booking-loader .progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary, #1a73e8), #764ba2);
+  border-radius: 4px;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.booking-loader .loader-hint {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin: 16px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+@media (max-width: 640px) {
+  .booking-loader .loader-content {
+    max-width: 90%;
+    padding: 30px 20px;
+  }
+  .booking-loader #loader-title {
+    font-size: 1.25rem;
+  }
+}
