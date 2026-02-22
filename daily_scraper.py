@@ -35,6 +35,11 @@ NUM_ORIGINS = 5
 # Incremental: 1 worker for 512 MB (Render). 3 workers for GitHub Actions (7 GB).
 NUM_WORKERS = 3 if WORKER_ID else 1
 
+# Booking URL phase: fetch google_booking_url for top N routes via Playwright.
+# Set FETCH_BOOKING_URLS=15 in GitHub Actions. Default 0 for Render (no Playwright). ~25 sec per route.
+FETCH_BOOKING_URLS = int(os.environ.get("FETCH_BOOKING_URLS", "0") or "0")
+MAX_BOOKING_URL_ROUTES = min(max(0, FETCH_BOOKING_URLS), 20)
+
 # Full baseline (local): set FULL_BASELINE=1 → 31 days, multi-worker
 FULL_BASELINE = os.environ.get("FULL_BASELINE", "").lower() in ("1", "true", "yes")
 FULL_BASELINE_WORKERS = 5
@@ -165,6 +170,20 @@ def run_incremental_scrape():
     )
 
     if results:
+        if MAX_BOOKING_URL_ROUTES > 0:
+            try:
+                from booking_url_fetcher import fetch_booking_urls, merge_booking_urls_into_flights
+
+                # Prioritize cheapest routes
+                by_price = sorted(results, key=lambda f: float(f.get("price") or 999999))
+                booking_urls = fetch_booking_urls(by_price, max_routes=MAX_BOOKING_URL_ROUTES)
+                merge_booking_urls_into_flights(results, booking_urls)
+                print(f"  Fetched google_booking_url for {len(booking_urls)} routes")
+            except ImportError as e:
+                print(f"  Skipping booking URL phase (playwright not available): {e}")
+            except Exception as e:
+                print(f"  Booking URL phase failed (non-fatal): {e}")
+
         db.reconnect()  # fresh connection after long scrape (avoids SSL connection closed)
         db.insert_flights(results)
         db.create_daily_snapshot()

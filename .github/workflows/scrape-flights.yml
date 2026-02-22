@@ -31,10 +31,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install Playwright Chromium
+        run: playwright install chromium
+
       - name: Scrape origins 1–13
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           WORKER_ID: '1'
+          FETCH_BOOKING_URLS: '15'
         run: python daily_scraper.py incremental
 
   scrape-worker-2:
@@ -52,10 +56,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install Playwright Chromium
+        run: playwright install chromium
+
       - name: Scrape origins 14–26
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           WORKER_ID: '2'
+          FETCH_BOOKING_URLS: '15'
         run: python daily_scraper.py incremental
 
   scrape-worker-3:
@@ -73,10 +81,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install Playwright Chromium
+        run: playwright install chromium
+
       - name: Scrape origins 27–38
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           WORKER_ID: '3'
+          FETCH_BOOKING_URLS: '15'
         run: python daily_scraper.py incremental
 
   scrape-worker-4:
@@ -94,10 +106,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install Playwright Chromium
+        run: playwright install chromium
+
       - name: Scrape origins 39–50
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           WORKER_ID: '4'
+          FETCH_BOOKING_URLS: '15'
         run: python daily_scraper.py incremental
 
   daily-scrape-summary:

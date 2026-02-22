@@ -287,26 +287,45 @@ async def book_redirect(
     finally:
         db.close()
 
-    if not google_booking_url:
-        fallback = (
-            "https://www.google.com/travel/flights?q="
-            + urllib.parse.quote(f"Flights from {origin} to {destination} on {date}")
-        )
-        return RedirectResponse(url=fallback)
+    fallback = (
+        "https://www.google.com/travel/flights?q="
+        + urllib.parse.quote(f"Flights from {origin} to {destination} on {date}")
+    )
 
-    try:
-        from booking_link_generator import get_generator
+    cloud_run_url = (os.getenv("CLOUD_RUN_URL") or os.getenv("LINK_EXTRACTOR_URL") or "").strip().rstrip("/")
 
-        generator = await get_generator()
-        fresh_link = await generator.get_fresh_booking_link(google_booking_url, timeout_ms=25000)
-        if fresh_link:
-            return RedirectResponse(url=fresh_link)
-    except ImportError:
-        pass
-    except Exception:
-        pass
+    # If we have a booking URL, use /extract (fast). Otherwise use /extract-from-search (search -> Select -> Continue).
+    if cloud_run_url:
+        endpoint = "/extract-from-search" if not google_booking_url else "/extract"
+        url_param = fallback if not google_booking_url else google_booking_url
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=55.0) as client:
+                resp = await client.get(f"{cloud_run_url}{endpoint}", params={"url": url_param})
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data.get("success") and data.get("url"):
+                        return RedirectResponse(url=data["url"])
+        except Exception:
+            pass
 
-    return RedirectResponse(url=google_booking_url)
+    # Fallback: local Playwright (only works if we have booking URL; fails on Render)
+    if google_booking_url:
+        try:
+            from booking_link_generator import get_generator
+
+            generator = await get_generator()
+            fresh_link = await generator.get_fresh_booking_link(google_booking_url, timeout_ms=25000)
+            if fresh_link:
+                return RedirectResponse(url=fresh_link)
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+        return RedirectResponse(url=google_booking_url)
+
+    return RedirectResponse(url=fallback)
 
 
 @app.post("/api/alerts/subscribe")
