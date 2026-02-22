@@ -54,7 +54,10 @@ async def extract_link(
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
-            args=["--disable-dev-shm-usage", "--no-sandbox", "--disable-gpu"],
+            args=[
+                "--disable-dev-shm-usage", "--no-sandbox", "--disable-gpu",
+                "--disable-extensions", "--no-first-run", "--disable-background-networking",
+            ],
         )
         context = await browser.new_context(
             viewport={"width": 1280, "height": 900},
@@ -64,8 +67,8 @@ async def extract_link(
         page.set_default_timeout(timeout_ms)
 
         try:
-            await page.goto(url, wait_until="networkidle", timeout=20000)
-            await page.wait_for_timeout(3000)
+            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            await page.wait_for_timeout(1200)
 
             btns = page.locator("button[aria-label*='Continue to book with' i]")
             n = await btns.count()
@@ -78,14 +81,14 @@ async def extract_link(
 
             pages_before = set(page.context.pages)
             await btns.nth(0).click()
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(1000)
 
             pages_after = set(page.context.pages)
             new_pages = pages_after - pages_before
             target = next(iter(new_pages), page)
 
-            for _ in range(25):
-                await page.wait_for_timeout(500)
+            for _ in range(15):
+                await page.wait_for_timeout(300)
                 final_url = target.url
                 if final_url and _is_external_link(final_url):
                     await browser.close()
@@ -120,7 +123,10 @@ async def extract_from_search(
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
-            args=["--disable-dev-shm-usage", "--no-sandbox", "--disable-gpu"],
+            args=[
+                "--disable-dev-shm-usage", "--no-sandbox", "--disable-gpu",
+                "--disable-extensions", "--no-first-run", "--disable-background-networking",
+            ],
         )
         context = await browser.new_context(
             viewport={"width": 1280, "height": 900},
@@ -131,8 +137,8 @@ async def extract_from_search(
         page.set_default_timeout(timeout_ms)
 
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            await page.wait_for_timeout(2500)
+            await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+            await page.wait_for_timeout(1200)
 
             # If we land on booking page (direct booking URL), skip Select flight
             if "/travel/flights/booking" in page.url:
@@ -165,8 +171,8 @@ async def extract_from_search(
                     await browser.close()
                     return {"success": False, "error": "No Select flight button found", "fallback_url": url}
 
-                await page.wait_for_load_state("domcontentloaded", timeout=15000)
-                await page.wait_for_timeout(2000)
+                await page.wait_for_load_state("domcontentloaded", timeout=12000)
+                await page.wait_for_timeout(1000)
 
                 if "/travel/flights/booking" not in page.url:
                     try:
@@ -180,7 +186,7 @@ async def extract_from_search(
                     return {"success": False, "error": "Did not reach booking page", "fallback_url": url}
 
             # Booking page: click Continue to book with (same as /extract)
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(1000)
             btns = page.locator("button[aria-label*='Continue to book with' i]")
             n = await btns.count()
             if n == 0:
@@ -192,14 +198,14 @@ async def extract_from_search(
 
             pages_before = set(page.context.pages)
             await btns.nth(0).click()
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(1000)
 
             pages_after = set(page.context.pages)
             new_pages = pages_after - pages_before
             target = next(iter(new_pages), page)
 
-            for _ in range(25):
-                await page.wait_for_timeout(500)
+            for _ in range(15):
+                await page.wait_for_timeout(300)
                 final_url = target.url
                 if final_url and _is_external_link(final_url):
                     await browser.close()
