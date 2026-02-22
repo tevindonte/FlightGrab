@@ -336,5 +336,8 @@
   "iata_airport:CPT": "/m/01nfn_",
   "iata_airport:DUR": "/m/027cd1t",
   "iata_airport:LUN": "/m/0d83gv",
-  "iata_airport:HRE": "/m/08hs1n"
+  "iata_airport:HRE": "/m/08hs1n",
+  "iata_airport:ANC": "/m/01nwcc",
+  "iata_airport:AUS": "/m/01mz2x",
+  "iata_airport:BNA": "/m/01ql_l"
 }

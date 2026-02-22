@@ -398,8 +398,9 @@
         const cityName = getCityName(deal.destination);
         const code = deal.destination || '';
         const oneWayPrice = Number(deal.price) || 0;
-        const duration = deal.duration || '—';
+        const duration = deal.duration && String(deal.duration).trim() ? deal.duration : '';
         const stops = formatStops(deal.num_stops != null ? deal.num_stops : 0);
+        const durationStops = duration ? duration + ', ' + stops : stops;
         const dateStr = formatDate(deal.departure_date);
         const imgSrc = getCityImage(code);
         const imgFallback = getFallbackImage(code);
@@ -453,7 +454,7 @@
             ${originBadge}
             <h3 class="city-name">${cityName}</h3>
             <p class="airport-code">${deal.destination}</p>
-            <p class="flight-info">${duration}, ${stops}</p>
+            <p class="flight-info">${durationStops}</p>
             <p class="flight-dates">Departs ${dateStr}</p>
             <p class="price">from $${Math.round(oneWayPrice)}</p>
             <p class="price-note">one-way</p>

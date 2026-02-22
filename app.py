@@ -273,7 +273,7 @@ async def book_redirect(
         cursor = db.conn.cursor()
         cursor.execute(
             """
-            SELECT google_booking_url
+            SELECT google_booking_url, booking_url
             FROM current_prices
             WHERE origin = %s AND destination = %s AND departure_date = %s
             ORDER BY price ASC
@@ -284,20 +284,42 @@ async def book_redirect(
         row = cursor.fetchone()
         cursor.close()
         google_booking_url = row[0] if row and row[0] else None
+        booking_url = row[1] if row and len(row) > 1 and row[1] else None
     finally:
         db.close()
+
+    # Pre-extracted airline URL (from batch refresh): instant redirect, no Cloud Run needed
+    if booking_url and "google.com" not in (booking_url or "").lower():
+        return RedirectResponse(url=booking_url)
 
     fallback = (
         "https://www.google.com/travel/flights?q="
         + urllib.parse.quote(f"Flights from {origin} to {destination} on {date}")
     )
 
+    # For extract-from-search, use tfs (protobuf) URL - it works; simple ?q= often fails "Did not reach booking page"
+    search_url = fallback
+    if not google_booking_url:
+        try:
+            import sys
+            from pathlib import Path
+            rev_path = Path(__file__).parent / "reverse_engineering_scraping"
+            if str(rev_path) not in sys.path:
+                sys.path.insert(0, str(rev_path.parent))
+            from reverse_engineering_scraping.tfs_encoder import build_flights_url_from_iata
+            search_url = build_flights_url_from_iata(
+                slices_iata=[(date, origin, destination)],
+                adults=1, cabin="economy", trip_type="one_way", sort="cheapest",
+            )
+        except Exception:
+            pass
+
     cloud_run_url = (os.getenv("CLOUD_RUN_URL") or os.getenv("LINK_EXTRACTOR_URL") or "").strip().rstrip("/")
 
-    # If we have a booking URL, use /extract (fast). Otherwise use /extract-from-search (search -> Select -> Continue).
+    # Cloud Run: /extract for booking URL (fast), /extract-from-search when we only have search URL (slower but gets airline).
     if cloud_run_url:
         endpoint = "/extract-from-search" if not google_booking_url else "/extract"
-        url_param = fallback if not google_booking_url else google_booking_url
+        url_param = search_url if not google_booking_url else google_booking_url
         try:
             import httpx
             async with httpx.AsyncClient(timeout=55.0) as client:

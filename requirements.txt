@@ -6,3 +6,5 @@ fastapi>=0.104.0
 playwright>=1.40
 PyJWT>=2.8.0
 httpx>=0.25.0
+protobuf>=4.0
+requests>=2.28
