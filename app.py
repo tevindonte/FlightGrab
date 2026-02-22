@@ -99,6 +99,15 @@ async def get_config():
     }
 
 
+@app.get("/robots.txt")
+async def robots():
+    """Allow all crawlers (required for AdSense verification)."""
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(
+        "User-agent: *\nAllow: /\n"
+    )
+
+
 @app.get("/")
 async def root():
     """Serve the FlightGrab homepage."""
