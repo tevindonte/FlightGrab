@@ -24,7 +24,7 @@ def build_booking_url(origin: str, destination: str, date: str, base_url: str = 
     if base_url and "book-redirect" in base_url:
         return base_url
     base = "https://www.google.com/travel/flights"
-    q = f"Flights from {origin} to {destination} on {date}"
+    q = f"One way flights from {origin} to {destination} on {date}"
     return f"{base}?q={urllib.parse.quote(q)}"
 
 

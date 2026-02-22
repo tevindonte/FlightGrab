@@ -42,4 +42,10 @@ python alert_checker.py
 ## 5. GitHub Actions
 
 The workflow at `.github/workflows/check-alerts.yml` runs daily at 4:30 AM UTC.
-Add `ZOHO_SMTP_PASSWORD` and `DATABASE_URL` to the repo secrets.
+
+- **Secrets** (Settings → Secrets and variables → Actions):
+  - `DATABASE_URL`
+  - `ZOHO_SMTP_PASSWORD`
+- **Variables** (Settings → Secrets and variables → Actions):
+  - `ZOHO_FROM_EMAIL` (e.g. noreply@flightgrab.cc)
+  - `APP_URL` (e.g. https://flightgrab.cc) – used for "Manage alerts" link in emails

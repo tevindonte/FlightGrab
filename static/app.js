@@ -60,6 +60,40 @@
     }
   }
 
+  function tryPendingAlert() {
+    try {
+      const raw = sessionStorage.getItem('flightgrab_pending_alert');
+      if (!raw || !currentUser) return;
+      const data = JSON.parse(raw);
+      sessionStorage.removeItem('flightgrab_pending_alert');
+      if (!data.origin || !data.destination) return;
+      openAlertModal(data);
+    } catch (e) {}
+  }
+
+  async function tryPendingSave() {
+    try {
+      const raw = sessionStorage.getItem('flightgrab_pending_save');
+      if (!raw || !currentUser) return;
+      const pending = JSON.parse(raw);
+      sessionStorage.removeItem('flightgrab_pending_save');
+      if (!pending.origin || !pending.destination) return;
+      let token = '';
+      if (Clerk && Clerk.session) token = await Clerk.session.getToken({ skipCache: true });
+      if (!token) return;
+      const res = await fetch(`${API}/api/saved-flights`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ origin: pending.origin, destination: pending.destination })
+      });
+      if (res.ok) {
+        const btn = document.querySelector('.btn-save-flight[data-save-origin="' + pending.origin + '"][data-save-dest="' + pending.destination + '"]');
+        if (btn) { btn.textContent = 'Saved ✓'; btn.classList.add('saved'); btn.disabled = true; }
+        openSavedFlightsModal();
+      }
+    } catch (e) {}
+  }
+
   function runApp() {
     const originSelect = document.getElementById('origin');
     const originInput = document.getElementById('origin-input');
@@ -1318,6 +1352,7 @@
       const alertBtn = e.target.closest('.btn-alert');
       if (alertBtn) {
         e.preventDefault();
+        e.stopPropagation();
         try {
           const data = JSON.parse(alertBtn.dataset.alert || '{}');
           window.openAlertModal && openAlertModal(data);
@@ -1336,6 +1371,7 @@
       const saveBtn = e.target.closest('.btn-save-flight');
       if (saveBtn && !saveBtn.disabled) {
         e.preventDefault();
+        e.stopPropagation();
         const origin = saveBtn.dataset.saveOrigin;
         const dest = saveBtn.dataset.saveDest;
         if (origin && dest) saveFlightFromCard(origin, dest, saveBtn);
@@ -1591,6 +1627,7 @@
     if (!data || !data.origin || !data.destination) return;
     if (!currentUser) {
       if (Clerk) {
+        try { sessionStorage.setItem('flightgrab_pending_alert', JSON.stringify(data)); } catch (e) {}
         if (confirm('Sign in to set price alerts. Sign in now?')) Clerk.openSignIn();
       } else {
         alert('Sign in is required for price alerts. Set up Clerk to enable this feature.');
@@ -1621,7 +1658,7 @@
     if (!origin || !destination || isNaN(targetPrice)) return;
     try {
       let token = '';
-      if (Clerk && Clerk.session) token = await Clerk.session.getToken();
+      if (Clerk && Clerk.session) token = await Clerk.session.getToken({ skipCache: true });
       const res = await fetch(`${API}/api/alerts/subscribe`, {
         method: 'POST',
         headers: {
@@ -1804,6 +1841,11 @@
       const res = await fetch(`${API}/api/alerts`, {
         headers: { 'Authorization': token ? 'Bearer ' + token : '' }
       });
+      if (res.status === 401) {
+        listEl.innerHTML = '<p class="alerts-loading">Please sign in to view your alerts.</p>';
+        emptyEl.classList.add('hidden');
+        return;
+      }
       const data = await res.json().catch(function () { return {}; });
       const alerts = data.alerts || [];
       if (alerts.length === 0) {
@@ -1887,6 +1929,11 @@
       const res = await fetch(`${API}/api/saved-flights`, {
         headers: { 'Authorization': token ? 'Bearer ' + token : '' }
       });
+      if (res.status === 401) {
+        listEl.innerHTML = '<p class="alerts-loading">Please sign in to view saved flights.</p>';
+        emptyEl.classList.add('hidden');
+        return;
+      }
       const data = await res.json().catch(function () { return {}; });
       const flights = data.saved_flights || [];
       if (flights.length === 0) {
@@ -1945,6 +1992,7 @@
 
   async function saveFlightFromCard(origin, destination, btnEl) {
     if (!currentUser) {
+      try { sessionStorage.setItem('flightgrab_pending_save', JSON.stringify({ origin, destination })); } catch (e) {}
       if (Clerk) Clerk.openSignIn();
       return;
     }
@@ -1954,6 +2002,7 @@
         token = await Clerk.session.getToken({ skipCache: true });
       }
       if (!token) {
+        try { sessionStorage.setItem('flightgrab_pending_save', JSON.stringify({ origin, destination })); } catch (e) {}
         if (Clerk) Clerk.openSignIn();
         else alert('Please sign in to save flights.');
         return;
@@ -1986,7 +2035,11 @@
   }
 
   loadAirports();
-  Promise.resolve(initializeAuth()).then(checkHashAndOpenModals);
+  Promise.resolve(initializeAuth()).then(function () {
+    checkHashAndOpenModals();
+    tryPendingAlert();
+    tryPendingSave();
+  });
   }
 
   async function bootstrap() {
