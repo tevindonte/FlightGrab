@@ -294,7 +294,7 @@ async def book_redirect(
 
     fallback = (
         "https://www.google.com/travel/flights?q="
-        + urllib.parse.quote(f"Flights from {origin} to {destination} on {date}")
+        + urllib.parse.quote(f"One way flights from {origin} to {destination} on {date}")
     )
 
     # For extract-from-search, use tfs (protobuf) URL - it works; simple ?q= often fails "Did not reach booking page"

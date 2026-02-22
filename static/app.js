@@ -411,7 +411,7 @@
           ? `${API}/api/book-redirect?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&date=${encodeURIComponent(depDate)}`
           : '#';
         const googleFlightsUrl = origin && dest && depDate
-          ? `https://www.google.com/travel/flights?q=${encodeURIComponent('Flights from ' + origin + ' to ' + dest + ' on ' + depDate)}`
+          ? `https://www.google.com/travel/flights?q=${encodeURIComponent('One way flights from ' + origin + ' to ' + dest + ' on ' + depDate)}`
           : '#';
         const fallbackSvg = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27400%27%20height%3D%27300%27%3E%3Crect%20fill%3D%27%231a73e8%27%20width%3D%27400%27%20height%3D%27300%27%2F%3E%3C%2Fsvg%3E";
         const originBadge = mode === 'all' && deal.origin
@@ -1897,7 +1897,7 @@
       emptyEl.classList.add('hidden');
       listEl.innerHTML = flights.map(function (f) {
         const created = f.created_at ? new Date(f.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-        const searchUrl = `https://www.google.com/travel/flights?q=${encodeURIComponent('Flights from ' + f.origin + ' to ' + f.destination)}`;
+        const searchUrl = `https://www.google.com/travel/flights?q=${encodeURIComponent('One way flights from ' + f.origin + ' to ' + f.destination)}`;
         const note = f.notes ? escapeHtml(f.notes) : '';
         return `<div class="saved-flight-item" data-id="${f.id}">
           <div class="saved-flight-info">
