@@ -84,7 +84,8 @@ def download_airport_images(codes: list[str]) -> None:
 def main():
     import argparse
     ap = argparse.ArgumentParser(description="Add manual routes: LAX-CDG, JFK-CDG")
-    ap.add_argument("--days", type=int, default=7, help="Days ahead to scrape (default 7)")
+    ap.add_argument("--days", type=int, default=7, help="Days to scrape (default 7)")
+    ap.add_argument("--start-date", default=None, help="Start date YYYY-MM-DD (default: today)")
     ap.add_argument("--no-scrape", action="store_true", help="Skip scrape, only download images")
     args = ap.parse_args()
 
@@ -109,10 +110,21 @@ def main():
     # 3. Scrape for each date
     from flight_scraper import scrape_route
 
+    if args.start_date:
+        try:
+            start = datetime.strptime(args.start_date, "%Y-%m-%d")
+        except ValueError:
+            print(f"Invalid --start-date {args.start_date!r}, use YYYY-MM-DD")
+            sys.exit(1)
+    else:
+        start = datetime.now()
+
     dates_to_scrape = []
     for i in range(args.days):
-        d = (datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d")
+        d = (start + timedelta(days=i)).strftime("%Y-%m-%d")
         dates_to_scrape.append(d)
+
+    print(f"  Dates: {dates_to_scrape[0]} to {dates_to_scrape[-1]}")
 
     print(f"\n2. Scraping {len(all_routes)} routes x {len(dates_to_scrape)} dates...")
     flights = []
