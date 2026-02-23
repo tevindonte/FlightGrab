@@ -54,6 +54,13 @@ async def lifespan(app: FastAPI):
         db.close()
     except Exception:
         pass
+    # Pre-warm sitemap cache so Google's first fetch gets instant response (avoids cold-start timeout)
+    try:
+        import time
+        _sitemap_cache["xml"] = _build_sitemap_xml()
+        _sitemap_cache["expires"] = time.time() + 3600
+    except Exception:
+        pass
     yield
     try:
         from booking_link_generator import close_generator
@@ -178,11 +185,13 @@ async def route_landing_page(request: Request, route_slug: str):
         db.close()
 
 
-@app.get("/sitemap.xml")
-async def sitemap_xml():
-    """
-    XML sitemap for Google indexing. Includes homepage, /deals, and all route pages.
-    """
+# In-memory cache for sitemap (avoids DB + cold-start timeout when Google retries)
+_sitemap_cache: dict = {"xml": None, "expires": 0.0}
+_SITEMAP_TTL = 3600  # 1 hour
+
+
+def _build_sitemap_xml() -> str:
+    """Generate sitemap XML. Called on cache miss."""
     db = get_db()
     try:
         routes = db.get_all_routes()
@@ -204,7 +213,28 @@ async def sitemap_xml():
             )
 
     xml_lines.append("</urlset>")
-    return Response(content="\n".join(xml_lines), media_type="application/xml")
+    return "\n".join(xml_lines)
+
+
+@app.get("/sitemap.xml")
+async def sitemap_xml():
+    """
+    XML sitemap for Google indexing. Cached for 1 hour to avoid cold-start timeouts.
+    """
+    import time
+    now = time.time()
+    if _sitemap_cache["xml"] and _sitemap_cache["expires"] > now:
+        xml = _sitemap_cache["xml"]
+    else:
+        xml = _build_sitemap_xml()
+        _sitemap_cache["xml"] = xml
+        _sitemap_cache["expires"] = now + _SITEMAP_TTL
+
+    return Response(
+        content=xml,
+        media_type="application/xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 @app.get("/api/airports")
