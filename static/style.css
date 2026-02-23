@@ -1458,6 +1458,10 @@ picture {
   cursor: default;
 }
 
+.calendar-tile.has-price {
+  cursor: pointer;
+}
+
 .calendar-tile.has-price:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-hover);
@@ -1676,6 +1680,92 @@ picture {
 .cal-grid-cell.has-price {
   cursor: pointer;
   transition: all 0.2s;
+}
+
+/* Calendar flight details modal */
+.modal-calendar-flight {
+  max-width: 420px;
+}
+
+.flight-details-content {
+  text-align: center;
+  padding: 0 8px;
+}
+
+.flight-details-route {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.flight-details-date {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.flight-details-price {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--primary, #1a73e8);
+  margin-bottom: 4px;
+}
+
+.flight-details-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0 0 20px;
+}
+
+.flight-details-meta {
+  text-align: left;
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.flight-meta-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 0.9rem;
+}
+
+.flight-meta-row:not(:last-child) {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.flight-meta-row .meta-label {
+  color: #6b7280;
+}
+
+.flight-meta-row .meta-value {
+  color: #111827;
+  font-weight: 500;
+}
+
+.flight-details-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.flight-details-actions .btn-primary,
+.flight-details-actions .btn-secondary {
+  flex: 1;
+  min-width: 140px;
+  text-align: center;
+  text-decoration: none;
+}
+
+.flight-details-note {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin: 0;
 }
 
 .cal-grid-cell.has-price:hover {

@@ -1472,7 +1472,8 @@
       const weekday = dayNames[dateObj.getDay()];
       const shortDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       const bookUrl = `${API}/api/book-redirect?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(d.date)}`;
-      html += '<div class="calendar-tile has-price ' + priceClass + '" data-date="' + escapeAttr(d.date) + '" data-price="' + d.price + '" data-book="' + escapeAttr(bookUrl) + '">';
+      const flightJson = escapeAttr(JSON.stringify({ date: d.date, price: d.price, airline: d.airline, duration: d.duration, num_stops: d.num_stops || 0 }));
+      html += '<div class="calendar-tile has-price ' + priceClass + '" data-date="' + escapeAttr(d.date) + '" data-price="' + d.price + '" data-book="' + escapeAttr(bookUrl) + '" data-flight="' + flightJson + '" title="Click to book">';
       html += '<span class="cal-day">' + weekday + ', ' + shortDate + '</span><span class="cal-price">$' + Math.round(d.price) + '</span></div>';
     });
     html += '</div>';
@@ -1506,7 +1507,8 @@
         else if (pct < 0.5) priceClass = 'good-deal';
         else if (pct >= 0.8) priceClass = 'expensive';
         const bookUrl = `${API}/api/book-redirect?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(dateStr)}`;
-        html += '<div class="cal-grid-cell has-price ' + priceClass + '" data-date="' + escapeAttr(dateStr) + '" data-price="' + info.price + '" data-book="' + escapeAttr(bookUrl) + '"><span class="cal-num">' + cur.getDate() + '</span><span class="cal-val">$' + Math.round(info.price) + '</span></div>';
+        const flightJson = escapeAttr(JSON.stringify({ date: dateStr, price: info.price, airline: info.airline, duration: info.duration, num_stops: info.num_stops || 0 }));
+        html += '<div class="cal-grid-cell has-price ' + priceClass + '" data-date="' + escapeAttr(dateStr) + '" data-price="' + info.price + '" data-book="' + escapeAttr(bookUrl) + '" data-flight="' + flightJson + '" title="Click to book"><span class="cal-num">' + cur.getDate() + '</span><span class="cal-val">$' + Math.round(info.price) + '</span></div>';
       } else {
         html += '<div class="cal-grid-cell no-data"><span class="cal-num">' + cur.getDate() + '</span><span class="cal-val">—</span></div>';
       }
@@ -1517,21 +1519,54 @@
     bindCalendarCellClicks(grid, selectedEl, 'cal-grid-cell.has-price');
   }
 
+  window.openCalendarFlightModal = function (origin, destination, flightData) {
+    const modal = document.getElementById('calendar-flight-modal');
+    const routeEl = document.getElementById('cal-flight-route');
+    const dateEl = document.getElementById('cal-flight-date');
+    const priceEl = document.getElementById('cal-flight-price');
+    const airlineEl = document.getElementById('cal-flight-airline');
+    const durationEl = document.getElementById('cal-flight-duration');
+    const stopsEl = document.getElementById('cal-flight-stops');
+    const bookBtn = document.getElementById('cal-flight-book-btn');
+    const googleBtn = document.getElementById('cal-flight-google-btn');
+    if (!modal || !flightData) return;
+    const dateStr = flightData.date || '';
+    const price = flightData.price || 0;
+    routeEl.textContent = (getCityName ? getCityName(origin) : origin) + ' → ' + (getCityName ? getCityName(destination) : destination);
+    dateEl.textContent = dateStr ? new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : '—';
+    priceEl.textContent = '$' + Math.round(price);
+    airlineEl.textContent = flightData.airline || '—';
+    durationEl.textContent = flightData.duration || '—';
+    const ns = flightData.num_stops;
+    stopsEl.textContent = ns === 0 ? 'Nonstop' : ns === 1 ? '1 stop' : (ns || '—') + ' stops';
+    const bookUrl = `${API}/api/book-redirect?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(dateStr)}`;
+    const googleUrl = `https://www.google.com/travel/flights?q=${encodeURIComponent('One way flights from ' + origin + ' to ' + destination + ' on ' + dateStr)}`;
+    if (bookBtn) { bookBtn.href = bookUrl; bookBtn.textContent = 'Book Now →'; }
+    if (googleBtn) googleBtn.href = googleUrl;
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+  };
+
+  window.closeCalendarFlightModal = function () {
+    const modal = document.getElementById('calendar-flight-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+  };
+
   function bindCalendarCellClicks(container, selectedEl, selector) {
     container.querySelectorAll(selector).forEach(function (cell) {
       cell.addEventListener('click', function () {
         const book = cell.dataset.book;
-        if (!book) return;
-        if (selectedEl) {
-          const dateStr = cell.dataset.date;
-          const price = cell.dataset.price;
-          const dateObj = new Date(dateStr + 'T12:00:00');
-          const label = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-          selectedEl.querySelector('.calendar-selected-date').textContent = label;
-          selectedEl.querySelector('.calendar-selected-price').textContent = 'from $' + Math.round(parseFloat(price));
-          const bookBtn = document.getElementById('calendar-book-btn');
-          if (bookBtn) { bookBtn.href = book; bookBtn.textContent = 'Book this flight →'; }
-          selectedEl.classList.remove('hidden');
+        const flightRaw = cell.dataset.flight;
+        if (!book || !flightRaw) return;
+        let flightData;
+        try { flightData = JSON.parse(flightRaw); } catch (e) { flightData = { date: cell.dataset.date, price: parseFloat(cell.dataset.price) || 0 }; }
+        const origin = calendarModalData.origin;
+        const destination = calendarModalData.destination;
+        if (origin && destination && window.openCalendarFlightModal) {
+          window.openCalendarFlightModal(origin, destination, flightData);
         } else {
           window.open(book, '_blank');
         }
@@ -1818,6 +1853,13 @@
   document.getElementById('share-modal')?.querySelector('.modal-backdrop')?.addEventListener('click', closeShareModal);
   document.getElementById('share-modal')?.querySelector('.modal-close')?.addEventListener('click', closeShareModal);
   document.getElementById('share-modal')?.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeShareModal(); });
+
+  const calendarFlightModal = document.getElementById('calendar-flight-modal');
+  if (calendarFlightModal) {
+    calendarFlightModal.querySelector('.modal-backdrop')?.addEventListener('click', closeCalendarFlightModal);
+    calendarFlightModal.querySelector('.modal-close')?.addEventListener('click', closeCalendarFlightModal);
+    calendarFlightModal.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCalendarFlightModal(); });
+  }
 
   [document.getElementById('my-alerts-modal'), document.getElementById('saved-flights-modal')].forEach(function (m) {
     if (!m) return;

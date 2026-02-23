@@ -280,6 +280,30 @@
     </div>
   </div>
 
+  <div id="calendar-flight-modal" class="modal hidden" role="dialog" aria-labelledby="calendar-flight-modal-title">
+    <div class="modal-backdrop" onclick="window.closeCalendarFlightModal && closeCalendarFlightModal()"></div>
+    <div class="modal-content modal-calendar-flight">
+      <button type="button" class="modal-close" onclick="window.closeCalendarFlightModal && closeCalendarFlightModal()" aria-label="Close">&times;</button>
+      <h2 id="calendar-flight-modal-title" class="modal-title">Flight details</h2>
+      <div class="flight-details-content">
+        <div class="flight-details-route" id="cal-flight-route">Atlanta → Miami</div>
+        <div class="flight-details-date" id="cal-flight-date">March 15, 2026</div>
+        <div class="flight-details-price" id="cal-flight-price">$150</div>
+        <p class="flight-details-subtitle">one-way</p>
+        <div class="flight-details-meta">
+          <div class="flight-meta-row"><span class="meta-label">Airline</span><span id="cal-flight-airline" class="meta-value">—</span></div>
+          <div class="flight-meta-row"><span class="meta-label">Duration</span><span id="cal-flight-duration" class="meta-value">—</span></div>
+          <div class="flight-meta-row"><span class="meta-label">Stops</span><span id="cal-flight-stops" class="meta-value">—</span></div>
+        </div>
+        <div class="flight-details-actions">
+          <a id="cal-flight-book-btn" class="btn-primary" href="#">Book Now →</a>
+          <a id="cal-flight-google-btn" class="btn-secondary" href="#" target="_blank" rel="noopener">Compare on Google</a>
+        </div>
+        <p class="flight-details-note">You'll be redirected to the airline or Google Flights to complete your booking.</p>
+      </div>
+    </div>
+  </div>
+
   <div id="alert-modal" class="modal hidden" role="dialog" aria-labelledby="alert-modal-title">
     <div class="modal-backdrop" onclick="window.closeAlertModal && closeAlertModal()"></div>
     <div class="modal-content modal-small">
