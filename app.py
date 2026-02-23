@@ -5,15 +5,20 @@ FlightGrab - Flight Deals Aggregator API
 import os
 import urllib.parse
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Query, Header, Body
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Query, Header, Body, Request
+from fastapi.responses import RedirectResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 
 from db_manager import FlightDatabase
+from airport_names import get_city_name, parse_route_slug, route_slug
 
 load_dotenv()
+
+BASE_URL = os.getenv("APP_URL", "https://flightgrab.cc").rstrip("/")
+templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 
 
 def _verify_clerk_token(authorization: str | None) -> str | None:
@@ -104,7 +109,7 @@ async def robots():
     """Allow all crawlers (required for AdSense verification)."""
     from fastapi.responses import PlainTextResponse
     return PlainTextResponse(
-        "User-agent: *\nAllow: /\n"
+        "User-agent: *\nAllow: /\n\nSitemap: " + BASE_URL + "/sitemap.xml\n"
     )
 
 
@@ -115,6 +120,91 @@ async def root():
     if os.path.isfile(index_path):
         return FileResponse(index_path)
     return {"app": "FlightGrab", "docs": "/docs"}
+
+
+@app.get("/deals")
+async def deals_page():
+    """Serve the Explore All Deals page."""
+    deals_path = os.path.join(static_dir, "deals.html")
+    if os.path.isfile(deals_path):
+        return FileResponse(deals_path)
+    raise HTTPException(status_code=404, detail="Deals page not found")
+
+
+@app.get("/flights/{route_slug}")
+async def route_landing_page(request: Request, route_slug: str):
+    """
+    Route-specific landing page. URL format: /flights/ATL-to-MIA
+    SEO-optimized page with flight options, stats, and travel guide.
+    """
+    origin_code, dest_code = parse_route_slug(route_slug)
+    if not origin_code or not dest_code:
+        raise HTTPException(status_code=404, detail="Route not found")
+
+    db = get_db()
+    try:
+        flights = db.get_route_flights(origin_code, dest_code, limit=100)
+        if not flights:
+            raise HTTPException(status_code=404, detail="No flights found for this route")
+
+        prices = [f["price"] for f in flights]
+        cheapest_price = int(min(prices))
+        avg_price = round(sum(prices) / len(prices), 0)
+        savings = max(0, int(avg_price - cheapest_price))
+        total_flights = len(flights)
+
+        origin_name = get_city_name(origin_code)
+        dest_name = get_city_name(dest_code)
+
+        related = db.get_related_routes(origin_code, dest_code, limit=6)
+
+        return templates.TemplateResponse(
+            "route_page.html",
+            {
+                "request": request,
+                "origin_code": origin_code,
+                "dest_code": dest_code,
+                "origin_name": origin_name,
+                "dest_name": dest_name,
+                "flights": flights,
+                "cheapest_price": cheapest_price,
+                "avg_price": int(avg_price),
+                "total_flights": total_flights,
+                "savings": savings,
+                "related_routes": related,
+            },
+        )
+    finally:
+        db.close()
+
+
+@app.get("/sitemap.xml")
+async def sitemap_xml():
+    """
+    XML sitemap for Google indexing. Includes homepage, /deals, and all route pages.
+    """
+    db = get_db()
+    try:
+        routes = db.get_all_routes()
+    finally:
+        db.close()
+
+    xml_lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        f"  <url><loc>{BASE_URL}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>",
+        f"  <url><loc>{BASE_URL}/deals</loc><changefreq>daily</changefreq><priority>0.9</priority></url>",
+    ]
+
+    for r in routes:
+        slug = route_slug(r["origin"], r["destination"])
+        if slug:
+            xml_lines.append(
+                f"  <url><loc>{BASE_URL}/flights/{slug}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>"
+            )
+
+    xml_lines.append("</urlset>")
+    return Response(content="\n".join(xml_lines), media_type="application/xml")
 
 
 @app.get("/api/airports")
@@ -215,6 +305,62 @@ async def get_return_flights(
             "flights": flights,
             "count": len(flights),
         }
+    finally:
+        db.close()
+
+
+@app.get("/api/all-deals")
+async def get_all_deals(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=10, le=100),
+    origin: str = Query(None, min_length=3, max_length=3),
+    destination: str = Query(None, min_length=3, max_length=3),
+    max_price: float = Query(None),
+    date_from: str = Query(None),
+    date_to: str = Query(None),
+    date: str = Query(None, description="Single date YYYY-MM-DD"),
+    stops: int = Query(None, ge=0, le=3, description="Max stops (0=nonstop, 1=1 stop max, etc.)"),
+    sort_by: str = Query("price", pattern="^(price|departure_date|origin|destination)$"),
+    sort_order: str = Query("asc", pattern="^(asc|desc)$"),
+):
+    """
+    Get all flights with filters and pagination. Powers /deals page.
+    """
+    db = get_db()
+    try:
+        flights, total = db.get_all_flights_paginated(
+            page=page,
+            limit=limit,
+            origin=origin.upper() if origin else None,
+            destination=destination.upper() if destination else None,
+            max_price=max_price,
+            date_from=date_from,
+            date_to=date_to,
+            date_exact=date,
+            stops=stops,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+        return {
+            "flights": flights,
+            "total": total,
+            "page": page,
+            "pages": (total + limit - 1) // limit if total > 0 else 1,
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/cheap-destinations")
+async def cheap_destinations(
+    max_price: int = Query(100, ge=1, le=1000),
+    limit: int = Query(20, ge=5, le=50),
+):
+    """Get destinations with min price <= max_price. For 'fly under $X' widget."""
+    db = get_db()
+    try:
+        results = db.get_cheap_destinations(max_price=float(max_price), limit=limit)
+        return {"destinations": results}
     finally:
         db.close()
 

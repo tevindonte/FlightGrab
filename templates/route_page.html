@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cheap Flights from {{ origin_name }} to {{ dest_name }} | From ${{ cheapest_price }} | FlightGrab</title>
+  <meta name="description" content="Find the cheapest flights from {{ origin_name }} ({{ origin_code }}) to {{ dest_name }} ({{ dest_code }}). {{ total_flights }} options from ${{ cheapest_price }}. Compare prices and book now!">
+  <meta name="keywords" content="{{ origin_name }} to {{ dest_name }} flights, cheap flights {{ origin_code }} {{ dest_code }}, {{ origin_name }} {{ dest_name }} airfare">
+  <meta property="og:title" content="Cheap Flights {{ origin_name }} → {{ dest_name }} from ${{ cheapest_price }}">
+  <meta property="og:description" content="Save up to ${{ savings }} on flights from {{ origin_name }} to {{ dest_name }}. {{ total_flights }} options available.">
+  <meta property="og:type" content="website">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" type="image/png" href="/static/images/logo.png">
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2790122390767697"
+     crossorigin="anonymous"></script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "Flight from {{ origin_name }} to {{ dest_name }}",
+    "description": "Cheap flights from {{ origin_name }} to {{ dest_name }}",
+    "offers": {
+      "@type": "AggregateOffer",
+      "lowPrice": "{{ cheapest_price }}",
+      "highPrice": "{{ avg_price }}",
+      "priceCurrency": "USD",
+      "offerCount": "{{ total_flights }}"
+    }
+  }
+  </script>
+  <style>
+    .route-hero { background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%); color: white; padding: 28px; border-radius: 12px; margin-bottom: 24px; }
+    .route-hero h1 { margin: 0 0 16px; font-size: 1.5rem; }
+    .breadcrumb { font-size: 0.9rem; opacity: 0.9; margin-bottom: 8px; }
+    .breadcrumb a { color: white; text-decoration: underline; }
+    .route-stats { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 20px; }
+    .stat-card { background: rgba(255,255,255,0.2); padding: 16px 24px; border-radius: 10px; min-width: 120px; }
+    .stat-card.highlight { background: rgba(255,255,255,0.35); }
+    .stat-value { font-size: 1.5rem; font-weight: 700; }
+    .stat-label { font-size: 0.85rem; opacity: 0.9; }
+    .best-deal { margin-bottom: 32px; }
+    .best-deal h2 { font-size: 1.25rem; margin-bottom: 16px; }
+    .deal-card.featured { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; padding: 20px; background: #f8f9fa; border-radius: 12px; border: 1px solid var(--border); }
+    .deal-route .airport { font-weight: 600; font-size: 1.1rem; }
+    .deal-route .arrow { margin: 0 8px; color: var(--text-secondary); }
+    .price-badge .price { font-size: 1.5rem; font-weight: 700; color: var(--price-color); }
+    .btn-book { padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    .btn-book:hover { background: var(--primary-hover); }
+    .deal-note { margin-top: 12px; font-size: 0.9rem; color: var(--text-secondary); }
+    .route-flights-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 16px 0; }
+    .route-flights-table th, .route-flights-table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    .route-flights-table th { background: #f8f9fa; font-weight: 600; }
+    .route-flights-table .price { font-weight: 600; color: var(--price-color); }
+    .btn-book-small { padding: 6px 12px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; text-decoration: none; display: inline-block; }
+    .btn-book-small:hover { background: var(--primary-hover); }
+    .travel-guide { margin-top: 32px; }
+    .travel-guide h2 { font-size: 1.25rem; margin-bottom: 16px; }
+    .travel-guide h3 { font-size: 1rem; margin-top: 20px; margin-bottom: 8px; }
+    .travel-guide p { line-height: 1.6; margin-bottom: 12px; color: var(--text-secondary); }
+    .related-routes { margin-top: 32px; }
+    .related-routes h3 { font-size: 1.1rem; margin-bottom: 12px; }
+    .route-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+    .route-link { padding: 8px 16px; background: #f0f4f8; border-radius: 8px; text-decoration: none; color: var(--primary); font-size: 0.9rem; }
+    .route-link:hover { background: #e8eef4; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="container header-inner">
+      <a href="/" class="logo-link">
+        <img src="/static/images/logo.png" alt="FlightGrab" class="logo-img">
+        <span class="logo-text">FlightGrab</span>
+      </a>
+      <p class="tagline">Find the cheapest flights today</p>
+      <a href="/deals" class="btn-header btn-secondary" style="margin-left: auto;">All Deals</a>
+    </div>
+  </header>
+
+  <main class="container" style="padding-bottom: 48px;">
+    <section class="route-hero">
+      <div class="breadcrumb">
+        <a href="/">Home</a> →
+        <a href="/deals">All Deals</a> →
+        <span>{{ origin_name }} to {{ dest_name }}</span>
+      </div>
+      <h1>Cheap Flights from {{ origin_name }} to {{ dest_name }}</h1>
+      <div class="route-stats">
+        <div class="stat-card">
+          <div class="stat-value">${{ cheapest_price }}</div>
+          <div class="stat-label">Lowest Price</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${{ avg_price }}</div>
+          <div class="stat-label">Average Price</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{{ total_flights }}</div>
+          <div class="stat-label">Flight Options</div>
+        </div>
+        <div class="stat-card highlight">
+          <div class="stat-value">Save ${{ savings }}</div>
+          <div class="stat-label">vs. Average</div>
+        </div>
+      </div>
+    </section>
+
+    {% if flights %}
+    <section class="best-deal">
+      <h2>Best Deal Available</h2>
+      <div class="deal-card featured">
+        <div class="deal-route">
+          <span class="airport">{{ flights[0].origin }}</span>
+          <span class="arrow">→</span>
+          <span class="airport">{{ flights[0].destination }}</span>
+        </div>
+        <div class="deal-details">
+          <div class="deal-date">{{ flights[0].date }}</div>
+          <div class="deal-airline">{{ flights[0].airline or 'Multiple airlines' }}</div>
+          <div class="deal-stops">
+            {% if flights[0].stops == 0 %}Nonstop{% else %}{{ flights[0].stops }} stop(s){% endif %}
+          </div>
+        </div>
+        <div class="deal-price-section">
+          <div class="price-badge">
+            <span class="price">${{ flights[0].price | int }}</span>
+          </div>
+          <a href="/api/book-redirect?origin={{ flights[0].origin }}&destination={{ flights[0].destination }}&date={{ flights[0].date }}" class="btn-book" target="_blank">Book Now →</a>
+        </div>
+      </div>
+      <p class="deal-note">Book early to lock in this price before it goes up!</p>
+    </section>
+
+    <section class="all-flights">
+      <h2>All {{ total_flights }} Flight Options</h2>
+      <table class="route-flights-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Price</th>
+            <th>Airline</th>
+            <th>Stops</th>
+            <th>Duration</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for flight in flights[:30] %}
+          <tr>
+            <td>{{ flight.date }}</td>
+            <td class="price">${{ flight.price | int }}</td>
+            <td>{{ flight.airline or 'Various' }}</td>
+            <td>{% if flight.stops == 0 %}Nonstop{% else %}{{ flight.stops }}{% endif %}</td>
+            <td>{{ flight.duration or '—' }}</td>
+            <td>
+              <a href="/api/book-redirect?origin={{ flight.origin }}&destination={{ flight.destination }}&date={{ flight.date }}" class="btn-book-small" target="_blank">Book</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if total_flights > 30 %}
+      <p style="margin-top: 16px;">
+        <a href="/deals?origin={{ origin_code }}&destination={{ dest_code }}" class="btn-book-small">View All {{ total_flights }} Flights →</a>
+      </p>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <section class="travel-guide">
+      <h2>Flying from {{ origin_name }} to {{ dest_name }}: What You Need to Know</h2>
+      <div class="guide-content">
+        <h3>Best Time to Book</h3>
+        <p>Based on our price data, flights from {{ origin_name }} to {{ dest_name }} are typically cheapest when booked 3–4 weeks in advance. The average price is ${{ avg_price }}, but deals as low as ${{ cheapest_price }} are available for flexible travelers.</p>
+        <h3>Nonstop vs. Connecting Flights</h3>
+        <p>We track both nonstop and connecting flight options. While nonstop flights offer convenience, you can often save by choosing a one-stop option.</p>
+        <h3>Set Price Alerts</h3>
+        <p>Don't want to miss a deal? <a href="/">Set up a price alert</a> on FlightGrab and we'll email you when flights from {{ origin_name }} to {{ dest_name }} drop below your target price.</p>
+      </div>
+    </section>
+
+    {% if related_routes %}
+    <section class="related-routes">
+      <h3>Related Flight Searches</h3>
+      <div class="route-grid">
+        {% for r in related_routes %}
+        <a href="/flights/{{ r.origin }}-to-{{ r.destination }}" class="route-link">{{ r.origin }} → {{ r.destination }}</a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+  </main>
+
+  <footer style="text-align: center; padding: 24px; border-top: 1px solid var(--border); margin-top: 32px; font-size: 0.9rem; color: var(--text-secondary);">
+    <p style="margin: 0;">© 2026 FlightGrab. <a href="/">Home</a> · <a href="/deals">All Deals</a> · <a href="/static/about.html">About</a> · <a href="/static/privacy.html">Privacy</a> · <a href="/static/terms.html">Terms</a></p>
+  </footer>
+</body>
+</html>

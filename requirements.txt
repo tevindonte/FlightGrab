@@ -3,6 +3,7 @@ psycopg2-binary>=2.9.9
 python-dotenv>=1.0.0
 uvicorn[standard]>=0.24.0
 fastapi>=0.104.0
+jinja2>=3.1.0
 playwright>=1.40
 PyJWT>=2.8.0
 httpx>=0.25.0

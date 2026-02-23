@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All Flight Deals - FlightGrab</title>
+  <meta name="description" content="Browse all 20,000+ flight deals. Filter by origin, destination, date, and price. Find the cheapest flights across major US airports.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" type="image/png" href="/static/images/logo.png">
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2790122390767697"
+     crossorigin="anonymous"></script>
+  <style>
+    .deals-hero { background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%); color: white; padding: 24px; border-radius: var(--radius); margin-bottom: 24px; }
+    .deals-hero h1 { margin: 0 0 8px; font-size: 1.5rem; }
+    .deals-hero p { margin: 0; opacity: 0.9; font-size: 0.95rem; }
+    .deals-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 20px; padding: 16px; background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); }
+    .deals-filters label { font-size: 0.85rem; color: var(--text-secondary); }
+    .deals-filters input, .deals-filters select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; }
+    .deals-filters input { min-width: 100px; }
+    .deals-filters .filter-group { display: flex; flex-direction: column; gap: 4px; }
+    .deals-table-wrap { overflow-x: auto; margin-bottom: 20px; }
+    .deals-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .deals-table th, .deals-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+    .deals-table th { background: #f8f9fa; font-weight: 600; cursor: pointer; user-select: none; }
+    .deals-table th:hover { background: #eef; }
+    .deals-table .price { font-weight: 600; color: var(--price-color); }
+    .deals-table .btn-book { padding: 6px 14px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 0.85rem; text-decoration: none; display: inline-block; }
+    .deals-table .btn-book:hover { background: var(--primary-hover); }
+    .deals-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 20px; flex-wrap: wrap; }
+    .deals-pagination button { padding: 8px 16px; border: 1px solid var(--border); background: white; border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
+    .deals-pagination button:hover:not(:disabled) { background: #f0f0f0; }
+    .deals-pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .deals-results-count { font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="container header-inner">
+      <a href="/" class="logo-link">
+        <img src="/static/images/logo.png" alt="FlightGrab" class="logo-img">
+        <span class="logo-text">FlightGrab</span>
+      </a>
+      <p class="tagline">Find the cheapest flights today</p>
+      <a href="/" class="btn-header btn-secondary" style="margin-left: auto;">← Home</a>
+    </div>
+  </header>
+
+  <main class="container" style="padding-bottom: 48px;">
+    <div class="deals-hero">
+      <h1>All Flight Deals</h1>
+      <p>Browse thousands of flight options. Filter by origin, destination, date, and max price.</p>
+      <p id="total-flights-msg" style="margin-top: 8px;">Loading...</p>
+    </div>
+
+    <div class="deals-filters">
+      <div class="filter-group">
+        <label for="origin-filter">From (airport code)</label>
+        <input type="text" id="origin-filter" placeholder="e.g. ATL, JFK" maxlength="3">
+      </div>
+      <div class="filter-group">
+        <label for="dest-filter">To (airport code)</label>
+        <input type="text" id="dest-filter" placeholder="e.g. MIA, LAX" maxlength="3">
+      </div>
+      <div class="filter-group">
+        <label for="date-filter">Single date</label>
+        <input type="date" id="date-filter">
+      </div>
+      <div class="filter-group">
+        <label for="date-from-filter">Date from</label>
+        <input type="date" id="date-from-filter">
+      </div>
+      <div class="filter-group">
+        <label for="date-to-filter">Date to</label>
+        <input type="date" id="date-to-filter">
+      </div>
+      <div class="filter-group">
+        <label for="max-price">Max price ($)</label>
+        <input type="number" id="max-price" placeholder="e.g. 200" min="1">
+      </div>
+      <div class="filter-group">
+        <label for="stops-filter">Max stops</label>
+        <select id="stops-filter">
+          <option value="">Any</option>
+          <option value="0">Nonstop only</option>
+          <option value="1">1 stop max</option>
+          <option value="2">2 stops max</option>
+        </select>
+      </div>
+      <button type="button" class="btn-header btn-primary" id="btn-apply">Apply filters</button>
+      <button type="button" class="btn-header btn-secondary" id="btn-clear">Clear</button>
+    </div>
+
+    <div class="deals-results-count">
+      Showing <strong id="result-count">0</strong> of <strong id="total-count">0</strong> flights
+    </div>
+
+    <div id="deals-loading" class="skeleton-grid" style="min-height: 120px;">
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+    </div>
+    <div id="deals-error" class="error hidden"></div>
+
+    <div class="deals-table-wrap" id="deals-table-wrap" style="display: none;">
+      <table class="deals-table" id="deals-table">
+        <thead>
+          <tr>
+            <th data-sort="price" data-order="asc">Price</th>
+            <th data-sort="origin">From</th>
+            <th data-sort="destination">To</th>
+            <th data-sort="departure_date">Date</th>
+            <th>Stops</th>
+            <th>Airline</th>
+            <th>Duration</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="deals-body"></tbody>
+      </table>
+    </div>
+
+    <div class="deals-pagination" id="deals-pagination" style="display: none;">
+      <button type="button" id="btn-prev">← Prev</button>
+      <span>Page <strong id="current-page">1</strong> of <strong id="total-pages">1</strong></span>
+      <button type="button" id="btn-next">Next →</button>
+    </div>
+
+    <p style="margin-top: 24px; font-size: 0.9rem;">
+      <a href="/">← Back to homepage</a> | Browse curated deals from your chosen airport.
+    </p>
+  </main>
+
+  <script>
+    (function () {
+      let currentPage = 1;
+      let totalPages = 1;
+      let totalFlights = 0;
+      let sortBy = 'price';
+      let sortOrder = 'asc';
+      const limit = 50;
+
+      function params() {
+        const p = new URLSearchParams();
+        p.set('page', currentPage);
+        p.set('limit', limit);
+        p.set('sort_by', sortBy);
+        p.set('sort_order', sortOrder);
+        const origin = document.getElementById('origin-filter').value.trim().toUpperCase();
+        const dest = document.getElementById('dest-filter').value.trim().toUpperCase();
+        const dateSingle = document.getElementById('date-filter').value;
+        const dateFrom = document.getElementById('date-from-filter').value;
+        const dateTo = document.getElementById('date-to-filter').value;
+        const date = dateSingle || null;
+        const maxPrice = document.getElementById('max-price').value;
+        const stops = document.getElementById('stops-filter').value;
+        if (origin && origin.length === 3) p.set('origin', origin);
+        if (dest && dest.length === 3) p.set('destination', dest);
+        if (date) {
+          p.set('date', date);
+        } else {
+          if (dateFrom) p.set('date_from', dateFrom);
+          if (dateTo) p.set('date_to', dateTo);
+        }
+        if (maxPrice && parseInt(maxPrice, 10) > 0) p.set('max_price', maxPrice);
+        if (stops !== '') p.set('stops', stops);
+        return p;
+      }
+
+      function applyFilters() {
+        currentPage = 1;
+        fetchDeals();
+      }
+
+      function clearFilters() {
+        document.getElementById('origin-filter').value = '';
+        document.getElementById('dest-filter').value = '';
+        document.getElementById('date-filter').value = '';
+        document.getElementById('date-from-filter').value = '';
+        document.getElementById('date-to-filter').value = '';
+        document.getElementById('max-price').value = '';
+        document.getElementById('stops-filter').value = '';
+
+        const today = new Date().toISOString().slice(0, 10);
+        document.getElementById('date-filter').min = today;
+        document.getElementById('date-from-filter').min = today;
+        document.getElementById('date-to-filter').min = today;
+
+        currentPage = 1;
+        fetchDeals();
+      }
+
+      function bookUrl(origin, destination, date) {
+        return '/api/book-redirect?origin=' + encodeURIComponent(origin) + '&destination=' + encodeURIComponent(destination) + '&date=' + encodeURIComponent(date);
+      }
+
+      function fetchDeals() {
+        const loading = document.getElementById('deals-loading');
+        const errorEl = document.getElementById('deals-error');
+        const tableWrap = document.getElementById('deals-table-wrap');
+        const pagination = document.getElementById('deals-pagination');
+
+        loading.style.display = 'flex';
+        errorEl.classList.add('hidden');
+        tableWrap.style.display = 'none';
+        pagination.style.display = 'none';
+
+        fetch('/api/all-deals?' + params().toString())
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            loading.style.display = 'none';
+            if (data.flights && Array.isArray(data.flights)) {
+              totalFlights = data.total || 0;
+              totalPages = data.pages || 1;
+              renderTable(data.flights);
+              renderPagination();
+              document.getElementById('result-count').textContent = data.flights.length;
+              document.getElementById('total-count').textContent = data.total.toLocaleString();
+              document.getElementById('total-flights-msg').textContent = totalFlights.toLocaleString() + ' flight options • Updated daily';
+              tableWrap.style.display = 'block';
+              if (totalPages > 1) pagination.style.display = 'flex';
+            }
+          })
+          .catch(function (err) {
+            loading.style.display = 'none';
+            errorEl.textContent = 'Failed to load deals. Please try again.';
+            errorEl.classList.remove('hidden');
+            document.getElementById('total-flights-msg').textContent = 'Error loading data';
+          });
+      }
+
+      function renderTable(flights) {
+        const tbody = document.getElementById('deals-body');
+        tbody.innerHTML = '';
+        flights.forEach(function (f) {
+          const tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td class="price">$' + (f.price || 0).toFixed(0) + '</td>' +
+            '<td><a href="/flights/' + (f.origin || '') + '-to-' + (f.destination || '') + '" title="View all ' + (f.origin || '') + ' → ' + (f.destination || '') + ' flights">' + (f.origin || '') + '</a></td>' +
+            '<td><a href="/flights/' + (f.origin || '') + '-to-' + (f.destination || '') + '" title="View all ' + (f.origin || '') + ' → ' + (f.destination || '') + ' flights">' + (f.destination || '') + '</a></td>' +
+            '<td>' + (f.date || '') + '</td>' +
+            '<td>' + (f.stops === 0 ? 'Nonstop' : f.stops + ' stop(s)') + '</td>' +
+            '<td>' + (f.airline || '—') + '</td>' +
+            '<td>' + (f.duration || '—') + '</td>' +
+            '<td><a href="' + bookUrl(f.origin, f.destination, f.date) + '" class="btn-book" target="_blank">Book</a></td>';
+          tbody.appendChild(tr);
+        });
+      }
+
+      function renderPagination() {
+        document.getElementById('current-page').textContent = currentPage;
+        document.getElementById('total-pages').textContent = totalPages;
+        document.getElementById('btn-prev').disabled = currentPage <= 1;
+        document.getElementById('btn-next').disabled = currentPage >= totalPages;
+      }
+
+      function prevPage() {
+        if (currentPage > 1) {
+          currentPage--;
+          fetchDeals();
+        }
+      }
+
+      function nextPage() {
+        if (currentPage < totalPages) {
+          currentPage++;
+          fetchDeals();
+        }
+      }
+
+      function setupSort() {
+        document.querySelectorAll('.deals-table th[data-sort]').forEach(function (th) {
+          th.addEventListener('click', function () {
+            const s = th.getAttribute('data-sort');
+            if (sortBy === s) {
+              sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+              sortBy = s;
+              sortOrder = 'asc';
+            }
+            th.setAttribute('data-order', sortOrder);
+            currentPage = 1;
+            fetchDeals();
+          });
+        });
+      }
+
+      document.getElementById('btn-apply').addEventListener('click', applyFilters);
+      document.getElementById('btn-clear').addEventListener('click', clearFilters);
+      document.getElementById('btn-prev').addEventListener('click', prevPage);
+      document.getElementById('btn-next').addEventListener('click', nextPage);
+
+      ['origin-filter', 'dest-filter', 'max-price'].forEach(function (id) {
+        document.getElementById(id).addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') applyFilters();
+        });
+      });
+
+      const today = new Date().toISOString().slice(0, 10);
+      document.getElementById('date-filter').min = today;
+      document.getElementById('date-from-filter').min = today;
+      document.getElementById('date-to-filter').min = today;
+
+      setupSort();
+      fetchDeals();
+    })();
+  </script>
+</body>
+</html>

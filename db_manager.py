@@ -401,6 +401,221 @@ class FlightDatabase:
         cursor.close()
         return [r[0] for r in rows]
 
+    def get_route_flights(self, origin: str, destination: str, limit: int = 100):
+        """
+        Get flights for a specific route (origin -> destination).
+        Returns list of flight dicts with price, date, airline, etc.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT origin, destination, departure_date, price, num_stops, airline,
+                   duration, departure_time, COALESCE(booking_url, google_booking_url, google_flights_url),
+                   google_booking_url
+            FROM current_prices
+            WHERE origin = %s AND destination = %s
+            AND departure_date >= CURRENT_DATE AND price > 0
+            ORDER BY price ASC, departure_date ASC
+            LIMIT %s
+            """,
+            (origin.upper(), destination.upper(), limit),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+
+        def _num_stops(n):
+            if n is None:
+                return 0
+            try:
+                return int(n)
+            except (TypeError, ValueError):
+                return 0
+
+        return [
+            {
+                "origin": r[0],
+                "destination": r[1],
+                "date": r[2].isoformat() if r[2] else None,
+                "price": float(r[3]),
+                "stops": _num_stops(r[4]),
+                "airline": r[5] or "",
+                "duration": r[6] or "",
+                "departure_time": r[7] or "",
+                "booking_url": r[8],
+                "google_booking_url": r[9],
+            }
+            for r in rows
+        ]
+
+    def get_all_routes(self):
+        """
+        Get all unique (origin, destination) pairs with future flights.
+        For sitemap and route page discovery.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT origin, destination
+            FROM current_prices
+            WHERE departure_date >= CURRENT_DATE AND price > 0
+            ORDER BY origin, destination
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        return [{"origin": r[0], "destination": r[1]} for r in rows]
+
+    def get_related_routes(self, origin: str, destination: str, limit: int = 6):
+        """
+        Get related routes: other destinations from same origin, other origins to same destination.
+        For "Related flight searches" section.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            (SELECT origin, destination FROM current_prices
+             WHERE origin = %s AND destination != %s AND departure_date >= CURRENT_DATE AND price > 0
+             GROUP BY origin, destination ORDER BY MIN(price) ASC LIMIT %s)
+            UNION ALL
+            (SELECT origin, destination FROM current_prices
+             WHERE origin != %s AND destination = %s AND departure_date >= CURRENT_DATE AND price > 0
+             GROUP BY origin, destination ORDER BY MIN(price) ASC LIMIT %s)
+            """,
+            (origin.upper(), destination.upper(), limit // 2, origin.upper(), destination.upper(), limit // 2),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        return [{"origin": r[0], "destination": r[1]} for r in rows]
+
+    def get_all_flights_paginated(
+        self,
+        page: int = 1,
+        limit: int = 50,
+        origin: str = None,
+        destination: str = None,
+        max_price: float = None,
+        date_from: str = None,
+        date_to: str = None,
+        date_exact: str = None,
+        stops: int = None,
+        sort_by: str = "price",
+        sort_order: str = "asc",
+    ):
+        """
+        Get all flights with filters and pagination. For /deals page.
+        Returns: (flights list, total count)
+        """
+        cursor = self.conn.cursor()
+        conditions = ["departure_date >= CURRENT_DATE", "price > 0"]
+        params = []
+        if origin:
+            conditions.append("origin = %s")
+            params.append(origin.upper()[:3])
+        if destination:
+            conditions.append("destination = %s")
+            params.append(destination.upper()[:3])
+        if max_price is not None:
+            conditions.append("price <= %s")
+            params.append(float(max_price))
+        if date_exact and len(date_exact) == 10:
+            try:
+                datetime.strptime(date_exact, "%Y-%m-%d")
+                conditions.append("departure_date = %s::date")
+                params.append(date_exact)
+            except ValueError:
+                pass
+        elif date_from and date_to and len(date_from) == 10 and len(date_to) == 10:
+            try:
+                datetime.strptime(date_from, "%Y-%m-%d")
+                datetime.strptime(date_to, "%Y-%m-%d")
+                conditions.append("departure_date BETWEEN %s::date AND %s::date")
+                params.extend([date_from, date_to])
+            except ValueError:
+                pass
+        if stops is not None:
+            conditions.append("num_stops <= %s")
+            params.append(int(stops))
+        where_clause = " AND ".join(conditions)
+        sort_col = "price" if sort_by == "price" else sort_by
+        if sort_col not in ("price", "departure_date", "origin", "destination", "num_stops"):
+            sort_col = "price"
+        order = "ASC" if sort_order.lower() == "asc" else "DESC"
+        order_clause = f"ORDER BY {sort_col} {order}, departure_date ASC"
+        offset = (page - 1) * limit
+        params_ext = params + [limit, offset]
+        cursor.execute(
+            f"""
+            SELECT origin, destination, departure_date, price, num_stops, airline,
+                   duration, departure_time, google_booking_url, booking_url
+            FROM current_prices
+            WHERE {where_clause}
+            {order_clause}
+            LIMIT %s OFFSET %s
+            """,
+            params_ext,
+        )
+        rows = cursor.fetchall()
+        count_params = params
+        cursor.execute(
+            f"SELECT COUNT(*) FROM current_prices WHERE {where_clause}",
+            count_params,
+        )
+        total = cursor.fetchone()[0]
+        cursor.close()
+
+        def _num_stops(n):
+            if n is None:
+                return 0
+            try:
+                return int(n)
+            except (TypeError, ValueError):
+                return 0
+
+        flights = [
+            {
+                "origin": r[0],
+                "destination": r[1],
+                "date": r[2].isoformat() if r[2] else None,
+                "price": float(r[3]),
+                "stops": _num_stops(r[4]),
+                "airline": r[5] or "",
+                "duration": r[6] or "",
+                "departure_time": r[7] or "",
+                "google_booking_url": r[8],
+                "booking_url": r[9],
+            }
+            for r in rows
+        ]
+        return flights, total
+
+    def get_cheap_destinations(self, max_price: float = 100, limit: int = 20):
+        """
+        Get destinations where min price is <= max_price, with origin count.
+        For "Where can you fly for under $X?" widget.
+        Returns: list of {destination, min_price, origin_count}
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT destination, MIN(price)::float as min_price,
+                   COUNT(DISTINCT origin)::int as origin_count
+            FROM current_prices
+            WHERE departure_date >= CURRENT_DATE AND price > 0 AND price <= %s
+            GROUP BY destination
+            ORDER BY min_price ASC
+            LIMIT %s
+            """,
+            (float(max_price), limit),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        return [
+            {
+                "destination": r[0],
+                "min_price": round(float(r[1]), 2),
+                "origin_count": r[2],
+            }
+            for r in rows
+        ]
+
     def get_calendar_destinations(self, origin: str, limit: int = 200):
         """
         Get all destinations from an origin with their minimum price.
