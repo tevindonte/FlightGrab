@@ -204,6 +204,10 @@ def _build_sitemap_xml() -> str:
         f"  <url><loc>{BASE_URL}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>",
         f"  <url><loc>{BASE_URL}/deals</loc><changefreq>daily</changefreq><priority>0.9</priority></url>",
     ]
+    for page in ["about", "privacy", "terms"]:
+        xml_lines.append(
+            f"  <url><loc>{BASE_URL}/static/{page}.html</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>"
+        )
 
     for r in routes:
         slug = route_slug(r["origin"], r["destination"])
@@ -233,7 +237,10 @@ async def sitemap_xml():
     return Response(
         content=xml,
         media_type="application/xml; charset=utf-8",
-        headers={"Cache-Control": "public, max-age=3600"},
+        headers={
+            "Cache-Control": "public, max-age=3600",
+            "X-Robots-Tag": "all",
+        },
     )
 
 
