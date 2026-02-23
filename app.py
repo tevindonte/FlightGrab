@@ -397,7 +397,54 @@ async def cheap_destinations(
     db = get_db()
     try:
         results = db.get_cheap_destinations(max_price=float(max_price), limit=limit)
-        return {"destinations": results}
+        enriched = [
+            {**r, "destination_name": get_city_name(r["destination"])}
+            for r in results
+        ]
+        return {"destinations": enriched}
+    finally:
+        db.close()
+
+
+@app.get("/api/price-drops")
+async def price_drops(
+    limit: int = Query(6, ge=3, le=20),
+):
+    """Get routes with significant price drops (current min vs route average)."""
+    db = get_db()
+    try:
+        results = db.get_price_drops(limit=limit)
+        enriched = [
+            {
+                **r,
+                "origin_name": get_city_name(r["origin"]),
+                "destination_name": get_city_name(r["destination"]),
+                "previous_price": r["avg_price"],
+            }
+            for r in results
+        ]
+        return {"drops": enriched}
+    finally:
+        db.close()
+
+
+@app.get("/api/popular-routes")
+async def popular_routes(
+    limit: int = Query(10, ge=5, le=25),
+):
+    """Get routes with most flight options (proxy for popularity)."""
+    db = get_db()
+    try:
+        results = db.get_popular_routes(limit=limit)
+        enriched = [
+            {
+                **r,
+                "origin_name": get_city_name(r["origin"]),
+                "destination_name": get_city_name(r["destination"]),
+            }
+            for r in results
+        ]
+        return {"routes": enriched}
     finally:
         db.close()
 

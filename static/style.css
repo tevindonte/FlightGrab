@@ -2204,3 +2204,276 @@ picture {
     font-size: 1.25rem;
   }
 }
+
+/* Cheapest Destinations & Widgets */
+.cheapest-destinations,
+.price-drops-section,
+.popular-routes-section {
+  margin: 48px 0;
+  padding: 0;
+}
+
+.cheapest-destinations .section-header,
+.price-drops-section .section-header,
+.popular-routes-section .section-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.cheapest-destinations .section-header h2,
+.price-drops-section .section-header h2,
+.popular-routes-section .section-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.cheapest-destinations .section-header p,
+.price-drops-section .section-header p,
+.popular-routes-section .section-header p {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.destinations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 0 0 24px;
+}
+
+.destination-card {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: all 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.destination-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.destination-image {
+  width: 100%;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  background: linear-gradient(135deg, var(--primary) 0%, #0d47a1 100%);
+}
+
+.destination-info {
+  padding: 12px 16px;
+  background: var(--card-bg);
+}
+
+.destination-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.destination-price {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--price-color);
+  margin: 0 0 4px;
+}
+
+.destination-price .from {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.destination-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.destination-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #10b981;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.price-drops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin: 0 0 24px;
+}
+
+.price-drop-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  border-left: 4px solid #10b981;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.price-drop-card:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
+}
+
+.price-drop-route {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.price-drop-route .arrow {
+  color: var(--text-secondary);
+  margin: 0 6px;
+}
+
+.price-drop-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.price-drop-current {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--price-color);
+}
+
+.price-drop-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: #dcfce7;
+  color: #166534;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.price-drop-was {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-decoration: line-through;
+}
+
+.routes-list {
+  margin: 0 0 24px;
+}
+
+.route-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s ease;
+}
+
+.route-item:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+.route-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.route-rank {
+  width: 28px;
+  height: 28px;
+  background: #f3f4f6;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.route-cities {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.route-price {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--price-color);
+  flex-shrink: 0;
+}
+
+.loading-dest {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.view-all-container {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.view-all-container .btn-secondary {
+  display: inline-block;
+  padding: 10px 20px;
+  background: transparent;
+  color: var(--primary);
+  border: 2px solid var(--primary);
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.view-all-container .btn-secondary:hover {
+  background: var(--primary);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .cheapest-destinations .section-header h2,
+  .price-drops-section .section-header h2,
+  .popular-routes-section .section-header h2 {
+    font-size: 1.25rem;
+  }
+  .destinations-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .price-drops-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -303,6 +303,11 @@
       document.getElementById('date-from-filter').min = today;
       document.getElementById('date-to-filter').min = today;
 
+      var urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('max_price')) document.getElementById('max-price').value = urlParams.get('max_price');
+      if (urlParams.get('origin')) document.getElementById('origin-filter').value = urlParams.get('origin');
+      if (urlParams.get('destination')) document.getElementById('dest-filter').value = urlParams.get('destination');
+
       setupSort();
       fetchDeals();
     })();

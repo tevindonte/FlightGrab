@@ -616,6 +616,80 @@ class FlightDatabase:
             for r in rows
         ]
 
+    def get_price_drops(self, limit: int = 10):
+        """
+        Get routes where current min price is significantly below route average.
+        Heuristic: compare MIN(price) to AVG(price) per route.
+        Returns: list of {origin, destination, current_price, avg_price, drop_percent}
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            WITH route_stats AS (
+                SELECT origin, destination,
+                       MIN(price)::float as current_price,
+                       AVG(price)::float as avg_price,
+                       COUNT(*) as flight_count
+                FROM current_prices
+                WHERE departure_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '60 days'
+                AND price > 0
+                GROUP BY origin, destination
+                HAVING COUNT(*) >= 3
+            )
+            SELECT origin, destination, current_price, avg_price,
+                   ((avg_price - current_price) / NULLIF(avg_price, 0) * 100)::float as drop_pct
+            FROM route_stats
+            WHERE avg_price > 0 AND ((avg_price - current_price) / avg_price * 100) > 15
+            ORDER BY drop_pct DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        return [
+            {
+                "origin": r[0],
+                "destination": r[1],
+                "current_price": float(r[2]),
+                "avg_price": float(r[3]),
+                "drop_percent": round(float(r[4] or 0), 1),
+            }
+            for r in rows
+        ]
+
+    def get_popular_routes(self, limit: int = 10):
+        """
+        Get routes with most flight options (proxy for popularity).
+        Later: track actual user searches/clicks.
+        Returns: list of {origin, destination, min_price, flight_count}
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT origin, destination,
+                   MIN(price)::float as min_price,
+                   COUNT(*)::int as flight_count
+            FROM current_prices
+            WHERE departure_date >= CURRENT_DATE AND price > 0
+            GROUP BY origin, destination
+            ORDER BY flight_count DESC, min_price ASC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        return [
+            {
+                "origin": r[0],
+                "destination": r[1],
+                "min_price": round(float(r[2]), 2),
+                "flight_count": r[3],
+            }
+            for r in rows
+        ]
+
     def get_calendar_destinations(self, origin: str, limit: int = 200):
         """
         Get all destinations from an origin with their minimum price.

@@ -864,6 +864,95 @@
     } catch (e) {}
   }
 
+  function getDestinationEmoji(code) {
+    const emojis = { 'MIA': '🏖️', 'LAX': '🌴', 'LAS': '🎰', 'JFK': '🗽', 'ORD': '🏙️', 'DEN': '⛰️', 'SEA': '☕', 'BOS': '🦞', 'SFO': '🌉', 'ATL': '✈️', 'PHX': '🌵', 'MCO': '🎢', 'HNL': '🌺', 'ANC': '🐻', 'PDX': '🌲', 'DFW': '🤠', 'FLL': '🏝️', 'TPA': '🌊', 'CUN': '🍹', 'LHR': '🇬🇧', 'CDG': '🗼' };
+    return emojis[code] || '✈️';
+  }
+
+  function loadHomepageWidgets() {
+    var grid = document.getElementById('cheap-destinations-grid');
+    if (grid) {
+      fetch((typeof API !== 'undefined' ? API : '') + '/api/cheap-destinations?max_price=100&limit=8')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.destinations && data.destinations.length > 0) {
+            grid.innerHTML = data.destinations.map(function (d) {
+              var name = d.destination_name || d.destination || '';
+              var price = Math.round(d.min_price || 0);
+              var count = d.origin_count || 0;
+              var link = '/deals?destination=' + encodeURIComponent(d.destination);
+              var badge = price < 75 ? '<div class="destination-badge">Hot Deal</div>' : '';
+              return '<a href="' + link + '" class="destination-card" title="Flights to ' + name + '">' +
+                '<div class="destination-image">' + getDestinationEmoji(d.destination) + '</div>' +
+                '<div class="destination-info">' +
+                '<div class="destination-name">' + escapeHtml(name) + '</div>' +
+                '<div class="destination-price"><span class="from">from</span> $' + price + '</div>' +
+                '<div class="destination-meta">From ' + count + ' ' + (count === 1 ? 'city' : 'cities') + '</div>' +
+                '</div>' + badge + '</a>';
+            }).join('');
+          } else {
+            grid.innerHTML = '<div class="loading-dest">No destinations found under $100</div>';
+          }
+        })
+        .catch(function () {
+          if (grid) grid.innerHTML = '<div class="loading-dest">Unable to load destinations</div>';
+        });
+    }
+    var dropsGrid = document.getElementById('price-drops-grid');
+    if (dropsGrid) {
+      fetch((typeof API !== 'undefined' ? API : '') + '/api/price-drops?limit=6')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.drops && data.drops.length > 0) {
+            dropsGrid.innerHTML = data.drops.map(function (d) {
+              var orig = d.origin_name || d.origin;
+              var dest = d.destination_name || d.destination;
+              var link = '/flights/' + d.origin + '-to-' + d.destination;
+              return '<a href="' + link + '" class="price-drop-card">' +
+                '<div class="price-drop-route">' + escapeHtml(orig) + '<span class="arrow">→</span>' + escapeHtml(dest) + '</div>' +
+                '<div class="price-drop-stats">' +
+                '<div class="price-drop-current">$' + Math.round(d.current_price) + '</div>' +
+                '<div class="price-drop-change">↓ ' + Math.round(d.drop_percent) + '% off</div>' +
+                '</div>' +
+                '<div class="price-drop-was">was $' + Math.round(d.previous_price || d.avg_price) + '</div>' +
+                '</a>';
+            }).join('');
+          } else {
+            dropsGrid.innerHTML = '<div class="loading-dest">No recent price drops</div>';
+          }
+        })
+        .catch(function () {
+          if (dropsGrid) dropsGrid.innerHTML = '<div class="loading-dest">Unable to load</div>';
+        });
+    }
+    var routesList = document.getElementById('popular-routes-list');
+    if (routesList) {
+      fetch((typeof API !== 'undefined' ? API : '') + '/api/popular-routes?limit=10')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.routes && data.routes.length > 0) {
+            routesList.innerHTML = data.routes.map(function (r, i) {
+              var orig = r.origin_name || r.origin;
+              var dest = r.destination_name || r.destination;
+              var link = '/flights/' + r.origin + '-to-' + r.destination;
+              return '<a href="' + link + '" class="route-item">' +
+                '<div class="route-info">' +
+                '<div class="route-rank">' + (i + 1) + '</div>' +
+                '<div class="route-cities">' + escapeHtml(orig) + ' → ' + escapeHtml(dest) + '</div>' +
+                '</div>' +
+                '<div class="route-price">$' + Math.round(r.min_price) + '</div>' +
+                '</a>';
+            }).join('');
+          } else {
+            routesList.innerHTML = '<div class="loading-dest">No routes available</div>';
+          }
+        })
+        .catch(function () {
+          if (routesList) routesList.innerHTML = '<div class="loading-dest">Unable to load</div>';
+        });
+    }
+  }
+
   async function loadAirports() {
     try {
       const res = await fetch(`${API}/api/airports?with_data=true`);
@@ -954,7 +1043,7 @@
         dateToEl.value = t;
       }
     }
-    if (isDate || isRange) fetchDeals(originSelect ? originSelect.value : 'ALL');
+    fetchDeals(originSelect ? originSelect.value : 'ALL');
   }
   if (dateRangeEl) {
     dateRangeEl.addEventListener('change', syncDateRangeVisibility);
@@ -2141,6 +2230,7 @@
   }
 
   loadAirports();
+  loadHomepageWidgets();
   Promise.resolve(initializeAuth()).then(function () {
     checkHashAndOpenModals();
     tryPendingAlert();
