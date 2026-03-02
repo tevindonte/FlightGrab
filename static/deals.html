@@ -34,6 +34,13 @@
     .deals-pagination button:hover:not(:disabled) { background: #f0f0f0; }
     .deals-pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
     .deals-results-count { font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 12px; }
+    .deals-facet-filters { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .deals-facet-filters h4 { font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 8px; }
+    .facet-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .facet-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f0f4f8; border: 1px solid var(--border); border-radius: 20px; font-size: 0.85rem; cursor: pointer; user-select: none; }
+    .facet-chip:hover { background: #e8eef4; }
+    .facet-chip.selected { background: var(--primary); color: white; border-color: var(--primary); }
+    .facet-chip .count { font-size: 0.75rem; opacity: 0.8; }
   </style>
 </head>
 <body>
@@ -44,6 +51,7 @@
         <span class="logo-text">FlightGrab</span>
       </a>
       <p class="tagline">Find the cheapest flights today</p>
+      <a href="/pricing" class="btn-header btn-secondary">Premium</a>
       <a href="/" class="btn-header btn-secondary" style="margin-left: auto;">← Home</a>
     </div>
   </header>
@@ -80,17 +88,21 @@
         <label for="max-price">Max price ($)</label>
         <input type="number" id="max-price" placeholder="e.g. 200" min="1">
       </div>
-      <div class="filter-group">
-        <label for="stops-filter">Max stops</label>
-        <select id="stops-filter">
-          <option value="">Any</option>
-          <option value="0">Nonstop only</option>
-          <option value="1">1 stop max</option>
-          <option value="2">2 stops max</option>
-        </select>
-      </div>
       <button type="button" class="btn-header btn-primary" id="btn-apply">Apply filters</button>
       <button type="button" class="btn-header btn-secondary" id="btn-clear">Clear</button>
+    </div>
+
+    <div class="deals-facet-filters" id="deals-facet-filters" style="display: none;">
+      <h4>Filter by airline, stops, or time</h4>
+      <div id="facet-airlines" class="facet-chips"></div>
+      <div style="margin-top: 12px;">
+        <h4>Stops</h4>
+        <div id="facet-stops" class="facet-chips"></div>
+      </div>
+      <div style="margin-top: 12px;">
+        <h4>Departure time</h4>
+        <div id="facet-time" class="facet-chips"></div>
+      </div>
     </div>
 
     <div class="deals-results-count">
@@ -141,6 +153,9 @@
       let sortBy = 'price';
       let sortOrder = 'asc';
       const limit = 50;
+      let selectedAirlines = [];
+      let selectedStops = null;
+      let selectedTime = null;
 
       function params() {
         const p = new URLSearchParams();
@@ -155,7 +170,6 @@
         const dateTo = document.getElementById('date-to-filter').value;
         const date = dateSingle || null;
         const maxPrice = document.getElementById('max-price').value;
-        const stops = document.getElementById('stops-filter').value;
         if (origin && origin.length === 3) p.set('origin', origin);
         if (dest && dest.length === 3) p.set('destination', dest);
         if (date) {
@@ -165,7 +179,9 @@
           if (dateTo) p.set('date_to', dateTo);
         }
         if (maxPrice && parseInt(maxPrice, 10) > 0) p.set('max_price', maxPrice);
-        if (stops !== '') p.set('stops', stops);
+        if (selectedStops !== null) p.set('stops', selectedStops);
+        (selectedAirlines || []).forEach(function (a) { p.append('airline', a); });
+        if (selectedTime) p.set('time_of_day', selectedTime);
         return p;
       }
 
@@ -181,7 +197,9 @@
         document.getElementById('date-from-filter').value = '';
         document.getElementById('date-to-filter').value = '';
         document.getElementById('max-price').value = '';
-        document.getElementById('stops-filter').value = '';
+        selectedAirlines = [];
+        selectedStops = null;
+        selectedTime = null;
 
         const today = new Date().toISOString().slice(0, 10);
         document.getElementById('date-filter').min = today;
@@ -216,6 +234,7 @@
               totalPages = data.pages || 1;
               renderTable(data.flights);
               renderPagination();
+              renderFacets(data.facets);
               document.getElementById('result-count').textContent = data.flights.length;
               document.getElementById('total-count').textContent = data.total.toLocaleString();
               document.getElementById('total-flights-msg').textContent = totalFlights.toLocaleString() + ' flight options • Updated daily';
@@ -229,6 +248,58 @@
             errorEl.classList.remove('hidden');
             document.getElementById('total-flights-msg').textContent = 'Error loading data';
           });
+      }
+
+      function renderFacets(facets) {
+        var container = document.getElementById('deals-facet-filters');
+        if (!facets || !container) return;
+        var airlines = facets.airlines || [];
+        var stops = facets.stops || [];
+        var timeOfDay = facets.time_of_day || [];
+        var hasAny = airlines.length > 0 || stops.length > 0 || timeOfDay.length > 0;
+        container.style.display = hasAny ? 'block' : 'none';
+
+        function isSelected(cls, val) {
+          if (cls === 'airline') return selectedAirlines.indexOf(val) >= 0;
+          if (cls === 'stops') return selectedStops === val;
+          if (cls === 'time') return selectedTime === val;
+          return false;
+        }
+
+        var airHtml = airlines.map(function (a) {
+          var sel = isSelected('airline', a.value);
+          return '<span class="facet-chip' + (sel ? ' selected' : '') + '" data-facet="airline" data-value="' + (a.value || '').replace(/"/g, '&quot;') + '" title="' + (a.count || 0) + ' flights">' + (a.value || 'Unknown') + ' <span class="count">(' + (a.count || 0) + ')</span></span>';
+        }).join('');
+        document.getElementById('facet-airlines').innerHTML = airHtml || '<span class="facet-chip" style="opacity:0.7">No airlines</span>';
+
+        var stopsHtml = '<span class="facet-chip' + (selectedStops === null ? ' selected' : '') + '" data-facet="stops" data-value="">Any</span>' + stops.map(function (s) {
+          var sel = isSelected('stops', s.value);
+          return '<span class="facet-chip' + (sel ? ' selected' : '') + '" data-facet="stops" data-value="' + s.value + '">' + (s.label || s.value) + ' <span class="count">(' + (s.count || 0) + ')</span></span>';
+        }).join('');
+        document.getElementById('facet-stops').innerHTML = stopsHtml;
+
+        var timeHtml = '<span class="facet-chip' + (selectedTime === null ? ' selected' : '') + '" data-facet="time" data-value="">Any</span>' + timeOfDay.map(function (t) {
+          var sel = isSelected('time', t.value);
+          return '<span class="facet-chip' + (sel ? ' selected' : '') + '" data-facet="time" data-value="' + (t.value || '') + '">' + (t.label || t.value) + ' <span class="count">(' + (t.count || 0) + ')</span></span>';
+        }).join('');
+        document.getElementById('facet-time').innerHTML = timeHtml;
+
+        container.querySelectorAll('.facet-chip[data-facet]').forEach(function (chip) {
+          chip.onclick = function () {
+            var facet = chip.getAttribute('data-facet');
+            var val = chip.getAttribute('data-value');
+            if (facet === 'airline') {
+              var idx = selectedAirlines.indexOf(val);
+              if (idx >= 0) selectedAirlines.splice(idx, 1); else selectedAirlines.push(val);
+            } else if (facet === 'stops') {
+              selectedStops = val === '' ? null : parseInt(val, 10);
+            } else if (facet === 'time') {
+              selectedTime = val === '' ? null : val;
+            }
+            currentPage = 1;
+            fetchDeals();
+          };
+        });
       }
 
       function renderTable(flights) {
@@ -307,6 +378,9 @@
       if (urlParams.get('max_price')) document.getElementById('max-price').value = urlParams.get('max_price');
       if (urlParams.get('origin')) document.getElementById('origin-filter').value = urlParams.get('origin');
       if (urlParams.get('destination')) document.getElementById('dest-filter').value = urlParams.get('destination');
+      if (urlParams.get('stops') !== null && urlParams.get('stops') !== '') selectedStops = parseInt(urlParams.get('stops'), 10);
+      if (urlParams.get('time_of_day')) selectedTime = urlParams.get('time_of_day');
+      if (urlParams.getAll('airline').length) selectedAirlines = urlParams.getAll('airline');
 
       setupSort();
       fetchDeals();

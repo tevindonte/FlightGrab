@@ -163,6 +163,9 @@ def run_incremental_scrape():
     db.connect()
     db.create_tables()
 
+    # Run cleanup FIRST so it always happens, even if scraping fails
+    db.cleanup_old_data()
+
     results = scrape_incremental(
         origins=origins,
         destinations=TOP_50_US_AIRPORTS,
@@ -187,7 +190,6 @@ def run_incremental_scrape():
         db.reconnect()  # fresh connection after long scrape (avoids SSL connection closed)
         db.insert_flights(results)
         db.create_daily_snapshot()
-        db.cleanup_old_data()
         print(f"\n✓ Incremental completed: {len(results)} flights updated")
     else:
         print("\n✗ No results collected")

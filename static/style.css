@@ -1860,6 +1860,34 @@ picture {
   color: var(--text-secondary);
 }
 
+.alert-limit-usage {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+
+.alert-upgrade-cta {
+  background: #f0f9ff;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 0 0 16px;
+}
+
+.alert-upgrade-cta p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.alert-upgrade-cta a {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.alert-upgrade-cta a:hover {
+  text-decoration: underline;
+}
+
 /* Return flight modal */
 .modal {
   position: fixed;

@@ -5,6 +5,7 @@ FlightGrab - Flight Deals Aggregator API
 import os
 import urllib.parse
 from contextlib import asynccontextmanager
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, Query, Header, Body, Request
 from fastapi.responses import RedirectResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -127,6 +128,15 @@ async def root():
     if os.path.isfile(index_path):
         return FileResponse(index_path)
     return {"app": "FlightGrab", "docs": "/docs"}
+
+
+@app.get("/pricing")
+async def pricing_page():
+    """Serve the Pricing / Premium subscription page."""
+    pricing_path = os.path.join(static_dir, "pricing.html")
+    if os.path.isfile(pricing_path):
+        return FileResponse(pricing_path)
+    raise HTTPException(status_code=404, detail="Pricing page not found")
 
 
 @app.get("/deals")
@@ -356,15 +366,19 @@ async def get_all_deals(
     date_from: str = Query(None),
     date_to: str = Query(None),
     date: str = Query(None, description="Single date YYYY-MM-DD"),
-    stops: int = Query(None, ge=0, le=3, description="Max stops (0=nonstop, 1=1 stop max, etc.)"),
+    stops: int = Query(None, ge=0, le=3, description="Exact stops (0=nonstop, 1=1 stop)"),
+    airline: list = Query(None, description="Filter by airline (can repeat for multiple)"),
+    time_of_day: str = Query(None, pattern="^(morning|afternoon|evening|night)$"),
     sort_by: str = Query("price", pattern="^(price|departure_date|origin|destination)$"),
     sort_order: str = Query("asc", pattern="^(asc|desc)$"),
 ):
     """
     Get all flights with filters and pagination. Powers /deals page.
+    Returns flights + facets (available filter options).
     """
     db = get_db()
     try:
+        airlines_list = [a.strip() for a in (airline or []) if a and str(a).strip()] or None
         flights, total = db.get_all_flights_paginated(
             page=page,
             limit=limit,
@@ -375,14 +389,28 @@ async def get_all_deals(
             date_to=date_to,
             date_exact=date,
             stops=stops,
+            airlines=airlines_list,
+            time_of_day=time_of_day,
             sort_by=sort_by,
             sort_order=sort_order,
+        )
+        facets = db.get_all_deals_facets(
+            origin=origin.upper() if origin else None,
+            destination=destination.upper() if destination else None,
+            max_price=max_price,
+            date_from=date_from,
+            date_to=date_to,
+            date_exact=date,
+            stops=stops,
+            airlines=airlines_list,
+            time_of_day=time_of_day,
         )
         return {
             "flights": flights,
             "total": total,
             "page": page,
             "pages": (total + limit - 1) // limit if total > 0 else 1,
+            "facets": facets,
         }
     finally:
         db.close()
@@ -597,12 +625,26 @@ async def book_redirect(
     return RedirectResponse(url=final_url)
 
 
+@app.get("/api/subscription/status")
+async def get_subscription_status(authorization: str = Header(None)):
+    """Get user's subscription status and alert limits."""
+    user_id = _verify_clerk_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    db = get_db()
+    try:
+        status = db.get_subscription_status(user_id)
+        return status
+    finally:
+        db.close()
+
+
 @app.post("/api/alerts/subscribe")
 async def subscribe_alert(
     body: dict = Body(...),
     authorization: str = Header(None),
 ):
-    """Subscribe to price alert. Requires Clerk auth."""
+    """Subscribe to price alert. Requires Clerk auth. Free users limited to 5 alerts."""
     user_id = _verify_clerk_token(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
@@ -621,6 +663,13 @@ async def subscribe_alert(
     try:
         alert_id = db.subscribe_alert(user_id, email, origin, destination, target_price)
         return {"id": alert_id, "status": "active"}
+    except ValueError as e:
+        if str(e) == "ALERT_LIMIT_REACHED":
+            raise HTTPException(
+                status_code=402,
+                detail="Upgrade to Premium for unlimited alerts",
+            )
+        raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
 
@@ -653,6 +702,82 @@ async def delete_alert(alert_id: int, authorization: str = Header(None)):
         return {"status": "deleted"}
     finally:
         db.close()
+
+
+@app.post("/api/subscription/checkout")
+async def create_checkout_session(authorization: str = Header(None)):
+    """Create Stripe Checkout session for Premium. Redirects user to Stripe-hosted payment page."""
+    user_id = _verify_clerk_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    stripe_secret = os.getenv("STRIPE_SECRET_KEY")
+    stripe_price_id = os.getenv("STRIPE_PRICE_ID")
+    if not stripe_secret or not stripe_price_id:
+        raise HTTPException(status_code=503, detail="Premium checkout not configured")
+    try:
+        import stripe
+        stripe.api_key = stripe_secret
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            line_items=[{"price": stripe_price_id, "quantity": 1}],
+            success_url=f"{BASE_URL}/pricing?success=true",
+            cancel_url=f"{BASE_URL}/pricing?canceled=true",
+            customer_email=None,
+            metadata={"user_id": user_id},
+            subscription_data={"metadata": {"user_id": user_id}},
+        )
+        return {"url": session.url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/webhooks/stripe")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhooks for subscription lifecycle."""
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    if not webhook_secret:
+        return Response(status_code=200)
+    try:
+        import stripe
+        stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    if event["type"] == "checkout.session.completed":
+        sess = event["data"]["object"]
+        user_id = sess.get("metadata", {}).get("user_id") or sess.get("subscription_data", {}).get("metadata", {}).get("user_id")
+        sub_id = sess.get("subscription")
+        if user_id and sub_id:
+            db = get_db()
+            try:
+                sub = stripe.Subscription.retrieve(sub_id)
+                period_end = datetime.fromtimestamp(sub["current_period_end"]) if sub.get("current_period_end") else None
+                db.upsert_subscription(user_id, status="active", stripe_subscription_id=sub_id, current_period_end=period_end)
+            finally:
+                db.close()
+    elif event["type"] == "customer.subscription.updated":
+        sub = event["data"]["object"]
+        user_id = sub.get("metadata", {}).get("user_id")
+        if user_id:
+            db = get_db()
+            try:
+                status = "active" if sub.get("status") in ("active", "trialing") else "canceled"
+                period_end = datetime.fromtimestamp(sub["current_period_end"]) if sub.get("current_period_end") else None
+                db.upsert_subscription(user_id, status=status, stripe_subscription_id=sub["id"], current_period_end=period_end)
+            finally:
+                db.close()
+    elif event["type"] == "customer.subscription.deleted":
+        sub = event["data"]["object"]
+        user_id = sub.get("metadata", {}).get("user_id")
+        if user_id:
+            db = get_db()
+            try:
+                db.upsert_subscription(user_id, status="free", stripe_subscription_id=None, current_period_end=None)
+            finally:
+                db.close()
+    return Response(status_code=200)
 
 
 @app.post("/api/saved-flights")

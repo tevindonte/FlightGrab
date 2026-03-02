@@ -33,6 +33,7 @@
         </div>
         <div id="user-dropdown" class="user-dropdown hidden">
           <a href="#alerts" id="link-my-alerts">My Alerts</a>
+          <a href="/pricing" id="link-pricing">Premium</a>
           <a href="#saved" id="link-saved-flights">Saved Flights</a>
           <a href="#" id="link-sign-out">Sign Out</a>
         </div>
@@ -267,6 +268,9 @@
       <button type="button" class="modal-close" onclick="window.closeMyAlertsModal && closeMyAlertsModal()" aria-label="Close">&times;</button>
       <h2 id="my-alerts-modal-title" class="modal-title">My Price Alerts</h2>
       <p class="modal-subtitle">Manage your price alerts. We'll email you when prices drop below your target.</p>
+      <div id="my-alerts-upgrade-cta" class="alert-upgrade-cta hidden">
+        <p>You've used all 5 free alerts. <a href="/pricing">Upgrade to Premium</a> for unlimited alerts.</p>
+      </div>
       <div id="my-alerts-list" class="alerts-list">
         <p class="alerts-loading">Loading...</p>
       </div>
@@ -349,6 +353,10 @@
       <p class="modal-subtitle">
         Get notified when <strong id="alert-route">ATL → MIA</strong> drops below your target
       </p>
+      <p id="alert-limit-usage" class="alert-limit-usage hidden">You've used <strong id="alert-count">0</strong> of <strong id="alert-limit">5</strong> alerts.</p>
+      <div id="alert-upgrade-cta" class="alert-upgrade-cta hidden">
+        <p>You've reached the free alert limit. <a href="/pricing">Upgrade to Premium</a> for unlimited alerts.</p>
+      </div>
       <form id="alert-form">
         <div class="form-group">
           <label for="alert-target-price">Target price (one-way)</label>
@@ -415,6 +423,7 @@
       <span class="footer-disclaimer">Bookings redirect to airline sites.</span>
       <a href="/static/privacy.html">Privacy</a>
       <a href="/static/terms.html">Terms</a>
+      <a href="/pricing">Pricing</a>
       <a href="/static/about.html">About</a>
     </div>
   </footer>

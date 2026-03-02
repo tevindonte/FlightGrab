@@ -1811,7 +1811,7 @@
     });
   }
 
-  window.openAlertModal = function (data) {
+  window.openAlertModal = async function (data) {
     if (!data || !data.origin || !data.destination) return;
     if (!currentUser) {
       if (Clerk) {
@@ -1827,6 +1827,28 @@
     document.getElementById('alert-target-price').value = Math.round((data.price || 0) * 0.8);
     document.getElementById('alert-origin').value = data.origin;
     document.getElementById('alert-destination').value = data.destination;
+    var limitUsage = document.getElementById('alert-limit-usage');
+    var upgradeCta = document.getElementById('alert-upgrade-cta');
+    var form = document.getElementById('alert-form');
+    limitUsage.classList.add('hidden');
+    upgradeCta.classList.add('hidden');
+    if (form) form.style.display = '';
+    try {
+      var token = Clerk && Clerk.session ? await Clerk.session.getToken() : '';
+      var statusRes = await fetch((typeof API !== 'undefined' ? API : '') + '/api/subscription/status', {
+        headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+      });
+      if (statusRes.ok) {
+        var status = await statusRes.json();
+        document.getElementById('alert-count').textContent = status.alert_count;
+        document.getElementById('alert-limit').textContent = status.alert_limit;
+        limitUsage.classList.remove('hidden');
+        if (!status.can_add_more) {
+          upgradeCta.classList.remove('hidden');
+          if (form) form.style.display = 'none';
+        }
+      }
+    } catch (e) {}
     document.getElementById('alert-modal').classList.remove('hidden');
   };
 
@@ -1863,6 +1885,10 @@
       if (res.ok) {
         alert('Price alert set! We\'ll email you when the price drops.');
         closeAlertModal();
+      } else if (res.status === 402) {
+        if (confirm('Upgrade to Premium for unlimited alerts. Go to pricing?')) {
+          window.location.href = '/pricing';
+        }
       } else {
         alert(data.error || data.detail || 'Failed to set alert. Please try again.');
       }
@@ -2029,6 +2055,7 @@
   async function fetchMyAlerts() {
     const listEl = document.getElementById('my-alerts-list');
     const emptyEl = document.getElementById('my-alerts-empty');
+    const upgradeCta = document.getElementById('my-alerts-upgrade-cta');
     if (!listEl) return;
     try {
       let token = '';
@@ -2039,10 +2066,21 @@
       if (res.status === 401) {
         listEl.innerHTML = '<p class="alerts-loading">Please sign in to view your alerts.</p>';
         emptyEl.classList.add('hidden');
+        if (upgradeCta) upgradeCta.classList.add('hidden');
         return;
       }
       const data = await res.json().catch(function () { return {}; });
       const alerts = data.alerts || [];
+      if (upgradeCta) {
+        var statusRes = await fetch(`${API}/api/subscription/status`, { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
+        if (statusRes.ok) {
+          var sub = await statusRes.json();
+          if (!sub.can_add_more && !sub.is_premium) upgradeCta.classList.remove('hidden');
+          else upgradeCta.classList.add('hidden');
+        } else {
+          upgradeCta.classList.add('hidden');
+        }
+      }
       if (alerts.length === 0) {
         listEl.innerHTML = '';
         emptyEl.classList.remove('hidden');

@@ -127,6 +127,20 @@ class FlightDatabase:
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_date_prefs ON user_date_preferences(user_id);")
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_subscriptions (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR(255) NOT NULL UNIQUE,
+                status VARCHAR(20) DEFAULT 'free',
+                stripe_customer_id VARCHAR(255),
+                stripe_subscription_id VARCHAR(255),
+                current_period_end TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON user_subscriptions(user_id);")
+
         self.conn.commit()
         cursor.close()
         print("Tables created")
@@ -496,11 +510,15 @@ class FlightDatabase:
         date_to: str = None,
         date_exact: str = None,
         stops: int = None,
+        airlines: list = None,
+        time_of_day: str = None,
         sort_by: str = "price",
         sort_order: str = "asc",
     ):
         """
         Get all flights with filters and pagination. For /deals page.
+        stops: exact match (0=nonstop, 1=1 stop, etc.). airlines: list of airline names.
+        time_of_day: morning|afternoon|evening|night.
         Returns: (flights list, total count)
         """
         cursor = self.conn.cursor()
@@ -531,8 +549,23 @@ class FlightDatabase:
             except ValueError:
                 pass
         if stops is not None:
-            conditions.append("num_stops <= %s")
+            conditions.append("num_stops = %s")
             params.append(int(stops))
+        if airlines and len(airlines) > 0:
+            placeholders = ", ".join(["%s"] * len(airlines))
+            conditions.append(f"airline IN ({placeholders})")
+            params.extend([a.strip() for a in airlines if a and a.strip()])
+        if time_of_day and time_of_day in ("morning", "afternoon", "evening", "night"):
+            h_expr = "NULLIF(substring(departure_time from '([0-9]{1,2}):'), '')::int"
+            am_expr = "(departure_time ~ ' AM' OR departure_time ~ 'AM ')"
+            pm_expr = "(departure_time ~ ' PM' OR departure_time ~ 'PM ')"
+            hour_conds = {
+                "morning": f"({am_expr} AND {h_expr} BETWEEN 5 AND 11)",
+                "afternoon": f"(({pm_expr} AND {h_expr} BETWEEN 1 AND 5) OR ({pm_expr} AND {h_expr} = 12))",
+                "evening": f"({pm_expr} AND {h_expr} BETWEEN 6 AND 9)",
+                "night": f"(({pm_expr} AND {h_expr} IN (10,11)) OR ({am_expr} AND {h_expr} IN (12,1,2,3,4)))",
+            }
+            conditions.append("(departure_time ~ '[0-9]{1,2}:[0-9]{2} *[AP]M' AND " + hour_conds[time_of_day] + ")")
         where_clause = " AND ".join(conditions)
         sort_col = "price" if sort_by == "price" else sort_by
         if sort_col not in ("price", "departure_date", "origin", "destination", "num_stops"):
@@ -585,6 +618,150 @@ class FlightDatabase:
             for r in rows
         ]
         return flights, total
+
+    def get_all_deals_facets(
+        self,
+        origin: str = None,
+        destination: str = None,
+        max_price: float = None,
+        date_from: str = None,
+        date_to: str = None,
+        date_exact: str = None,
+        stops: int = None,
+        airlines: list = None,
+        time_of_day: str = None,
+    ):
+        """
+        Get available filter options (airlines, stops, time) for the current filter set.
+        Only returns values that exist in the filtered dataset.
+        """
+        cursor = self.conn.cursor()
+        conditions = ["departure_date >= CURRENT_DATE", "price > 0"]
+        params = []
+        if origin:
+            conditions.append("origin = %s")
+            params.append(origin.upper()[:3])
+        if destination:
+            conditions.append("destination = %s")
+            params.append(destination.upper()[:3])
+        if max_price is not None:
+            conditions.append("price <= %s")
+            params.append(float(max_price))
+        if date_exact and len(date_exact) == 10:
+            try:
+                datetime.strptime(date_exact, "%Y-%m-%d")
+                conditions.append("departure_date = %s::date")
+                params.append(date_exact)
+            except ValueError:
+                pass
+        elif date_from and date_to and len(date_from) == 10 and len(date_to) == 10:
+            try:
+                datetime.strptime(date_from, "%Y-%m-%d")
+                datetime.strptime(date_to, "%Y-%m-%d")
+                conditions.append("departure_date BETWEEN %s::date AND %s::date")
+                params.extend([date_from, date_to])
+            except ValueError:
+                pass
+        if stops is not None:
+            conditions.append("num_stops = %s")
+            params.append(int(stops))
+        if airlines and len(airlines) > 0:
+            placeholders = ", ".join(["%s"] * len(airlines))
+            conditions.append(f"airline IN ({placeholders})")
+            params.extend([a.strip() for a in airlines if a and a.strip()])
+        if time_of_day and time_of_day in ("morning", "afternoon", "evening", "night"):
+            h_expr = "NULLIF(substring(departure_time from '([0-9]{1,2}):'), '')::int"
+            am_expr = "(departure_time ~ ' AM' OR departure_time ~ 'AM ')"
+            pm_expr = "(departure_time ~ ' PM' OR departure_time ~ 'PM ')"
+            hc = {
+                "morning": f"({am_expr} AND {h_expr} BETWEEN 5 AND 11)",
+                "afternoon": f"(({pm_expr} AND {h_expr} BETWEEN 1 AND 5) OR ({pm_expr} AND {h_expr} = 12))",
+                "evening": f"({pm_expr} AND {h_expr} BETWEEN 6 AND 9)",
+                "night": f"(({pm_expr} AND {h_expr} IN (10,11)) OR ({am_expr} AND {h_expr} IN (12,1,2,3,4)))",
+            }
+            conditions.append("(departure_time ~ '[0-9]{1,2}:[0-9]{2} *[AP]M' AND " + hc[time_of_day] + ")")
+        where_clause = " AND ".join(conditions)
+
+        airlines_facet = []
+        cursor.execute(
+            f"""
+            SELECT airline, COUNT(*)::int
+            FROM current_prices
+            WHERE {where_clause} AND airline IS NOT NULL AND airline != ''
+            GROUP BY airline
+            ORDER BY COUNT(*) DESC
+            LIMIT 50
+            """,
+            params,
+        )
+        for r in cursor.fetchall():
+            airlines_facet.append({"value": r[0], "count": r[1]})
+
+        stops_facet = []
+        cursor.execute(
+            f"""
+            SELECT num_stops, COUNT(*)::int
+            FROM current_prices
+            WHERE {where_clause}
+            GROUP BY num_stops
+            ORDER BY num_stops ASC
+            """,
+            params,
+        )
+        for r in cursor.fetchall():
+            n = r[0] if r[0] is not None else 0
+            try:
+                n = int(n)
+            except (TypeError, ValueError):
+                n = 0
+            label = "Nonstop" if n == 0 else ("1 stop" if n == 1 else f"{n} stops")
+            stops_facet.append({"value": n, "label": label, "count": r[1]})
+
+        time_facet = []
+        try:
+            cursor.execute(
+                f"""
+                WITH parsed AS (
+                    SELECT
+                        CASE
+                            WHEN departure_time ~ '[0-9]{{1,2}}:[0-9]{{2}} *[AP]M' THEN
+                                CASE
+                                    WHEN departure_time ~ 'PM' AND NULLIF(substring(departure_time from '([0-9]{{1,2}}):'), '')::int != 12
+                                        THEN NULLIF(substring(departure_time from '([0-9]{{1,2}}):'), '')::int + 12
+                                    WHEN departure_time ~ 'AM' AND NULLIF(substring(departure_time from '([0-9]{{1,2}}):'), '')::int = 12
+                                        THEN 0
+                                    ELSE NULLIF(substring(departure_time from '([0-9]{{1,2}}):'), '')::int
+                                END
+                            ELSE NULL
+                        END as hr
+                    FROM current_prices
+                    WHERE {where_clause}
+                )
+                SELECT
+                    CASE
+                        WHEN hr >= 5 AND hr < 12 THEN 'morning'
+                        WHEN hr >= 12 AND hr < 17 THEN 'afternoon'
+                        WHEN hr >= 17 AND hr < 21 THEN 'evening'
+                        WHEN hr IS NOT NULL THEN 'night'
+                        ELSE NULL
+                    END as bucket,
+                    COUNT(*)
+                FROM parsed
+                WHERE hr IS NOT NULL
+                GROUP BY 1
+                ORDER BY 1
+                """,
+                params,
+            )
+            label_map = {"morning": "Morning (5am-12pm)", "afternoon": "Afternoon (12pm-5pm)", "evening": "Evening (5pm-9pm)", "night": "Night (9pm-5am)"}
+            for r in cursor.fetchall():
+                if r[0]:
+                    time_facet.append({"value": r[0], "label": label_map.get(r[0], r[0]), "count": r[1]})
+        except Exception:
+            pass
+
+        cursor.close()
+        return {"airlines": airlines_facet, "stops": stops_facet, "time_of_day": time_facet}
 
     def get_cheap_destinations(self, max_price: float = 100, limit: int = 20):
         """
@@ -858,8 +1035,60 @@ class FlightDatabase:
             'google_booking_url': row[12] if len(row) > 12 else None,
         }
 
+    def get_subscription_status(self, user_id: str):
+        """Return is_premium, alert_count, alert_limit. Free users limited to 5 alerts."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT status FROM user_subscriptions WHERE user_id = %s",
+            (user_id,),
+        )
+        row = cursor.fetchone()
+        is_premium = row and row[0] == "active"
+        cursor.execute(
+            "SELECT COUNT(*) FROM price_alerts WHERE user_id = %s AND is_active = TRUE",
+            (user_id,),
+        )
+        alert_count = cursor.fetchone()[0]
+        alert_limit = 999999 if is_premium else 5
+        cursor.close()
+        return {
+            "is_premium": is_premium,
+            "alert_count": alert_count,
+            "alert_limit": alert_limit,
+            "can_add_more": alert_count < alert_limit,
+        }
+
+    def upsert_subscription(
+        self,
+        user_id: str,
+        status: str = "active",
+        stripe_customer_id: str = None,
+        stripe_subscription_id: str = None,
+        current_period_end: datetime = None,
+    ):
+        """Create or update user subscription (for Stripe webhooks)."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO user_subscriptions (user_id, status, stripe_customer_id, stripe_subscription_id, current_period_end, updated_at)
+            VALUES (%s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+                status = EXCLUDED.status,
+                stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, user_subscriptions.stripe_customer_id),
+                stripe_subscription_id = COALESCE(EXCLUDED.stripe_subscription_id, user_subscriptions.stripe_subscription_id),
+                current_period_end = COALESCE(EXCLUDED.current_period_end, user_subscriptions.current_period_end),
+                updated_at = NOW()
+            """,
+            (user_id, status, stripe_customer_id, stripe_subscription_id, current_period_end),
+        )
+        self.conn.commit()
+        cursor.close()
+
     def subscribe_alert(self, user_id: str, email: str, origin: str, destination: str, target_price: float) -> int:
-        """Insert price alert, return alert id."""
+        """Insert price alert, return alert id. Raises ValueError if free user at alert limit."""
+        status = self.get_subscription_status(user_id)
+        if not status["can_add_more"]:
+            raise ValueError("ALERT_LIMIT_REACHED")
         cursor = self.conn.cursor()
         cursor.execute(
             """
