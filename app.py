@@ -107,8 +107,11 @@ async def ping():
 @app.get("/api/config")
 async def get_config():
     """Public config for frontend (Clerk key, etc.)."""
+    clerk_accounts = os.getenv("CLERK_ACCOUNTS_URL", "https://accounts.flightgrab.cc").rstrip("/")
     return {
         "clerkPublishableKey": os.getenv("CLERK_PUBLISHABLE_KEY", ""),
+        "clerkSignInUrl": clerk_accounts + "/sign-in",
+        "clerkSignUpUrl": clerk_accounts + "/sign-up",
     }
 
 

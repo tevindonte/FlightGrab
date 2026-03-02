@@ -66,6 +66,10 @@ Use the CLI's printed `whsec_...` as `STRIPE_WEBHOOK_SECRET` for local dev.
    - After payment, webhook should set `user_subscriptions.status = 'active'`
    - User can now add unlimited alerts
 
+## Auth (Clerk) – Optional
+
+- **CLERK_ACCOUNTS_URL** – Base URL for Clerk hosted sign-in (default: `https://accounts.flightgrab.cc`). Override if your Clerk instance uses a different domain.
+
 ## Revenue expectation
 
 - 100 Premium users × $9.99 ≈ **$1,000/month**

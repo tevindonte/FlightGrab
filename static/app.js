@@ -3,8 +3,10 @@
 
   let currentUser = null;
   let Clerk = null;
+  let clerkSignInUrl = '';
+  let clerkSignUpUrl = '';
 
-  async function loadClerkAndRun(publishableKey) {
+  async function loadClerkAndRun(publishableKey, config) {
     if (!publishableKey) {
       runApp();
       return;
@@ -16,6 +18,10 @@
       script.setAttribute('data-clerk-publishable-key', publishableKey);
       script.onload = function () {
         Clerk = window.Clerk;
+        if (config) {
+          clerkSignInUrl = config.clerkSignInUrl || 'https://accounts.flightgrab.cc/sign-in';
+          clerkSignUpUrl = config.clerkSignUpUrl || 'https://accounts.flightgrab.cc/sign-up';
+        }
         runApp();
         resolve();
       };
@@ -24,35 +30,60 @@
     });
   }
 
+  async function getAuthToken() {
+    if (!Clerk || !Clerk.session) return null;
+    try {
+      const token = await Clerk.session.getToken({ skipCache: true });
+      return token || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function syncAuthUI() {
+    if (!Clerk) return;
+    var userMenu = document.getElementById('user-menu');
+    var signInSection = document.getElementById('sign-in-section');
+    var userName = document.getElementById('user-name');
+    var userAvatar = document.getElementById('user-avatar');
+    if (Clerk.user) {
+      currentUser = {
+        id: Clerk.user.id,
+        email: Clerk.user.primaryEmailAddress?.emailAddress || '',
+        firstName: Clerk.user.firstName || 'Account',
+        avatar: Clerk.user.imageUrl || ''
+      };
+      if (userName) userName.textContent = currentUser.firstName;
+      if (userAvatar) {
+        userAvatar.src = currentUser.avatar || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23666"/><rect width="24" height="24" fill="%23ddd"/></svg>';
+        userAvatar.alt = currentUser.firstName;
+      }
+      if (userMenu) { userMenu.style.display = 'flex'; userMenu.classList.add('header-auth-visible'); }
+      if (signInSection) signInSection.style.display = 'none';
+      Clerk.session.getToken().then(function (token) {
+        fetch((typeof API !== 'undefined' ? API : '') + '/api/date-preferences', { headers: { 'Authorization': 'Bearer ' + token } })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data && data.date_from && data.date_to) window.preferredDates = data;
+          })
+          .catch(function () {});
+      }).catch(function () {});
+    } else {
+      currentUser = null;
+      if (signInSection) { signInSection.style.display = 'flex'; signInSection.classList.add('header-auth-visible'); }
+      if (userMenu) userMenu.style.display = 'none';
+    }
+  }
+
   async function initializeAuth() {
     if (!Clerk) return;
     try {
       await Clerk.load();
-      if (Clerk.user) {
-        currentUser = {
-          id: Clerk.user.id,
-          email: Clerk.user.primaryEmailAddress?.emailAddress || '',
-          firstName: Clerk.user.firstName || 'Account',
-          avatar: Clerk.user.imageUrl || ''
-        };
-        document.getElementById('user-name').textContent = currentUser.firstName;
-        document.getElementById('user-avatar').src = currentUser.avatar || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23666"/><rect width="24" height="24" fill="%23ddd"/></svg>';
-        document.getElementById('user-avatar').alt = currentUser.firstName;
-        document.getElementById('user-menu').style.display = 'flex';
-        document.getElementById('user-menu').classList.add('header-auth-visible');
-        document.getElementById('sign-in-section').style.display = 'none';
-        Clerk.session.getToken().then(function (token) {
-          fetch((typeof API !== 'undefined' ? API : '') + '/api/date-preferences', { headers: { 'Authorization': 'Bearer ' + token } })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-              if (data && data.date_from && data.date_to) window.preferredDates = data;
-            })
-            .catch(function () {});
-        }).catch(function () {});
-      } else {
-        document.getElementById('sign-in-section').style.display = 'flex';
-        document.getElementById('sign-in-section').classList.add('header-auth-visible');
-        document.getElementById('user-menu').style.display = 'none';
+      syncAuthUI();
+      if (typeof Clerk.addListener === 'function') {
+        Clerk.addListener(function () {
+          syncAuthUI();
+        });
       }
     } catch (e) {
       document.getElementById('sign-in-section').style.display = 'flex';
@@ -78,8 +109,7 @@
       const pending = JSON.parse(raw);
       sessionStorage.removeItem('flightgrab_pending_save');
       if (!pending.origin || !pending.destination) return;
-      let token = '';
-      if (Clerk && Clerk.session) token = await Clerk.session.getToken({ skipCache: true });
+      const token = await getAuthToken();
       if (!token) return;
       const res = await fetch(`${API}/api/saved-flights`, {
         method: 'POST',
@@ -1236,17 +1266,21 @@
     const toVal = dateToEl && dateToEl.value;
     if (!fromVal || !toVal || !currentUser) {
       if (!currentUser && Clerk) {
-        if (confirm('Sign in to save your preferred dates. Sign in now?')) Clerk.openSignIn();
+        if (confirm('Sign in to save your preferred dates. Sign in now?')) redirectToSignIn();
       } else {
         alert('Select a date range first.');
       }
       return;
     }
     try {
-      const token = Clerk && Clerk.session ? await Clerk.session.getToken() : '';
+      const token = await getAuthToken();
+      if (!token) {
+        alert('Session expired. Please sign in again.');
+        return;
+      }
       const res = await fetch(`${API}/api/date-preferences`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({ date_from: fromVal, date_to: toVal })
       });
       if (res.ok) {
@@ -1816,7 +1850,7 @@
     if (!currentUser) {
       if (Clerk) {
         try { sessionStorage.setItem('flightgrab_pending_alert', JSON.stringify(data)); } catch (e) {}
-        if (confirm('Sign in to set price alerts. Sign in now?')) Clerk.openSignIn();
+        if (confirm('Sign in to set price alerts. Sign in now?')) redirectToSignIn();
       } else {
         alert('Sign in is required for price alerts. Set up Clerk to enable this feature.');
       }
@@ -1834,11 +1868,12 @@
     upgradeCta.classList.add('hidden');
     if (form) form.style.display = '';
     try {
-      var token = Clerk && Clerk.session ? await Clerk.session.getToken() : '';
-      var statusRes = await fetch((typeof API !== 'undefined' ? API : '') + '/api/subscription/status', {
-        headers: { 'Authorization': token ? 'Bearer ' + token : '' }
-      });
-      if (statusRes.ok) {
+      var token = await getAuthToken();
+      if (token) {
+        var statusRes = await fetch((typeof API !== 'undefined' ? API : '') + '/api/subscription/status', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        if (statusRes.ok) {
         var status = await statusRes.json();
         document.getElementById('alert-count').textContent = status.alert_count;
         document.getElementById('alert-limit').textContent = status.alert_limit;
@@ -1846,6 +1881,7 @@
         if (!status.can_add_more) {
           upgradeCta.classList.remove('hidden');
           if (form) form.style.display = 'none';
+        }
         }
       }
     } catch (e) {}
@@ -1862,18 +1898,21 @@
       alert('Please sign in to set alerts');
       return;
     }
+    const token = await getAuthToken();
+    if (!token) {
+      redirectToSignIn();
+      return;
+    }
     const origin = document.getElementById('alert-origin').value;
     const destination = document.getElementById('alert-destination').value;
     const targetPrice = parseFloat(document.getElementById('alert-target-price').value);
     if (!origin || !destination || isNaN(targetPrice)) return;
     try {
-      let token = '';
-      if (Clerk && Clerk.session) token = await Clerk.session.getToken({ skipCache: true });
       const res = await fetch(`${API}/api/alerts/subscribe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': token ? 'Bearer ' + token : ''
+          'Authorization': 'Bearer ' + token
         },
         body: JSON.stringify({
           user_id: currentUser.id,
@@ -1991,11 +2030,26 @@
     });
   });
 
+  function getReturnUrl() {
+    var base = (typeof window !== 'undefined' && window.location) ? (window.location.origin + window.location.pathname) : '/';
+    return base + (window.location.search || '');
+  }
+
+  function redirectToSignIn() {
+    var url = clerkSignInUrl || 'https://accounts.flightgrab.cc/sign-in';
+    window.location.href = url + '?redirect_url=' + encodeURIComponent(getReturnUrl());
+  }
+
+  function redirectToSignUp() {
+    var url = clerkSignUpUrl || 'https://accounts.flightgrab.cc/sign-up';
+    window.location.href = url + '?redirect_url=' + encodeURIComponent(getReturnUrl());
+  }
+
   document.getElementById('btn-sign-in')?.addEventListener('click', function () {
-    if (Clerk) Clerk.openSignIn();
+    redirectToSignIn();
   });
   document.getElementById('btn-sign-up')?.addEventListener('click', function () {
-    if (Clerk) Clerk.openSignUp();
+    redirectToSignUp();
   });
 
   const userMenuTrigger = document.getElementById('user-menu-trigger');
@@ -2015,12 +2069,12 @@
   });
   document.getElementById('link-my-alerts')?.addEventListener('click', function (e) {
     e.preventDefault();
-    if (currentUser) openMyAlertsModal(); else if (Clerk) Clerk.openSignIn();
+    if (currentUser) openMyAlertsModal(); else redirectToSignIn();
   });
 
   document.getElementById('link-saved-flights')?.addEventListener('click', function (e) {
     e.preventDefault();
-    if (currentUser) openSavedFlightsModal(); else if (Clerk) Clerk.openSignIn();
+    if (currentUser) openSavedFlightsModal(); else redirectToSignIn();
   });
 
   function checkHashAndOpenModals() {
@@ -2058,10 +2112,9 @@
     const upgradeCta = document.getElementById('my-alerts-upgrade-cta');
     if (!listEl) return;
     try {
-      let token = '';
-      if (Clerk && Clerk.session) token = await Clerk.session.getToken();
+      const token = await getAuthToken();
       const res = await fetch(`${API}/api/alerts`, {
-        headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
       });
       if (res.status === 401) {
         listEl.innerHTML = '<p class="alerts-loading">Please sign in to view your alerts.</p>';
@@ -2071,8 +2124,8 @@
       }
       const data = await res.json().catch(function () { return {}; });
       const alerts = data.alerts || [];
-      if (upgradeCta) {
-        var statusRes = await fetch(`${API}/api/subscription/status`, { headers: { 'Authorization': token ? 'Bearer ' + token : '' } });
+      if (upgradeCta && token) {
+        var statusRes = await fetch(`${API}/api/subscription/status`, { headers: { 'Authorization': 'Bearer ' + token } });
         if (statusRes.ok) {
           var sub = await statusRes.json();
           if (!sub.can_add_more && !sub.is_premium) upgradeCta.classList.remove('hidden');
@@ -2111,8 +2164,11 @@
   async function deleteAlert(id, btnEl) {
     if (!confirm('Remove this price alert?')) return;
     try {
-      let token = '';
-      if (Clerk && Clerk.session) token = await Clerk.session.getToken();
+      const token = await getAuthToken();
+      if (!token) {
+        redirectToSignIn();
+        return;
+      }
       const res = await fetch(`${API}/api/alerts/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': token ? 'Bearer ' + token : '' }
@@ -2157,10 +2213,9 @@
     const emptyEl = document.getElementById('saved-flights-empty');
     if (!listEl) return;
     try {
-      let token = '';
-      if (Clerk && Clerk.session) token = await Clerk.session.getToken();
+      const token = await getAuthToken();
       const res = await fetch(`${API}/api/saved-flights`, {
-        headers: { 'Authorization': token ? 'Bearer ' + token : '' }
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
       });
       if (res.status === 401) {
         listEl.innerHTML = '<p class="alerts-loading">Please sign in to view saved flights.</p>';
@@ -2203,8 +2258,11 @@
 
   async function deleteSavedFlight(id, btnEl) {
     try {
-      let token = '';
-      if (Clerk && Clerk.session) token = await Clerk.session.getToken();
+      const token = await getAuthToken();
+      if (!token) {
+        redirectToSignIn();
+        return;
+      }
       const res = await fetch(`${API}/api/saved-flights/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': token ? 'Bearer ' + token : '' }
@@ -2226,18 +2284,14 @@
   async function saveFlightFromCard(origin, destination, btnEl) {
     if (!currentUser) {
       try { sessionStorage.setItem('flightgrab_pending_save', JSON.stringify({ origin, destination })); } catch (e) {}
-      if (Clerk) Clerk.openSignIn();
+      redirectToSignIn();
       return;
     }
     try {
-      let token = '';
-      if (Clerk && Clerk.session) {
-        token = await Clerk.session.getToken({ skipCache: true });
-      }
+      const token = await getAuthToken();
       if (!token) {
         try { sessionStorage.setItem('flightgrab_pending_save', JSON.stringify({ origin, destination })); } catch (e) {}
-        if (Clerk) Clerk.openSignIn();
-        else alert('Please sign in to save flights.');
+        redirectToSignIn();
         return;
       }
       const res = await fetch(`${API}/api/saved-flights`, {
@@ -2255,9 +2309,9 @@
           btnEl.classList.add('saved');
           btnEl.disabled = true;
         }
+        openSavedFlightsModal();
       } else if (res.status === 401) {
-        if (Clerk) Clerk.openSignIn();
-        else alert('Session expired. Please sign in again.');
+        redirectToSignIn();
       } else {
         alert(data.error || data.detail || 'Failed to save.');
       }
@@ -2280,8 +2334,12 @@
     try {
       const res = await fetch(`${API}/api/config`);
       const config = await res.json();
-      await loadClerkAndRun(config.clerkPublishableKey || '');
+      clerkSignInUrl = config.clerkSignInUrl || 'https://accounts.flightgrab.cc/sign-in';
+      clerkSignUpUrl = config.clerkSignUpUrl || 'https://accounts.flightgrab.cc/sign-up';
+      await loadClerkAndRun(config.clerkPublishableKey || '', config);
     } catch (e) {
+      clerkSignInUrl = 'https://accounts.flightgrab.cc/sign-in';
+      clerkSignUpUrl = 'https://accounts.flightgrab.cc/sign-up';
       runApp();
     }
   }
