@@ -2405,8 +2405,6 @@
   }
 
   async function bootstrap() {
-    // Open auth modals immediately when landing with #signin/#signup (don't wait for async)
-    checkHashAndOpenModals();
     try {
       await fetch(`${API}/api/config`);
     } catch (e) {}
