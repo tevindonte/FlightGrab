@@ -19,6 +19,8 @@ from airport_names import get_city_name, parse_route_slug, route_slug
 load_dotenv()
 
 BASE_URL = os.getenv("APP_URL", "https://flightgrab.cc").rstrip("/")
+ZEPTOMAIL_API_KEY = os.getenv("ZEPTOMAIL_API_KEY") or os.getenv("ZOHO_SMTP_PASSWORD")
+ZEPTOMAIL_FROM = os.getenv("ZEPTOMAIL_FROM_EMAIL") or os.getenv("ZOHO_FROM_EMAIL", "noreply@flightgrab.cc")
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 
 
@@ -108,6 +110,37 @@ async def get_config():
     return {"authMode": "custom"}
 
 
+def _generate_verification_token():
+    import secrets
+    return secrets.token_urlsafe(32)
+
+
+def _send_verification_email(email: str, token: str):
+    """Send verification email via ZeptoMail. Does not raise if email fails."""
+    if not ZEPTOMAIL_API_KEY:
+        return
+    try:
+        from zeptomail import Config, Email
+        verify_url = f"{BASE_URL}/verify?token={token}"
+        config = Config(api_key=ZEPTOMAIL_API_KEY)
+        mail = Email(config)
+        mail.send(
+            from_=ZEPTOMAIL_FROM,
+            from_name="FlightGrab",
+            to=[email],
+            subject="Verify your FlightGrab account",
+            html_body=f"""
+                <h2>Welcome to FlightGrab!</h2>
+                <p>Click the link below to verify your email:</p>
+                <p><a href="{verify_url}">Verify Email</a></p>
+                <p>Or copy this link: {verify_url}</p>
+                <p>This link expires in 24 hours.</p>
+            """,
+        )
+    except Exception as e:
+        print(f"[FlightGrab] Failed to send verification email: {e}")
+
+
 @app.post("/api/auth/signup")
 async def auth_signup(body: dict = Body(...)):
     """Create account. Returns user + token."""
@@ -126,18 +159,27 @@ async def auth_signup(body: dict = Body(...)):
 
     pw_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     user_id = "user_" + str(uuid.uuid4()).replace("-", "")[:24]
+    verification_token = _generate_verification_token()
 
     db = get_db()
     try:
-        ok = db.create_user(user_id, email, pw_hash, first_name)
+        ok = db.create_user(user_id, email, pw_hash, first_name, verification_token=verification_token)
         if not ok:
             raise HTTPException(status_code=400, detail="Email already registered")
 
+        try:
+            _send_verification_email(email, verification_token)
+        except Exception:
+            pass
+
         payload = {"user_id": user_id, "email": email, "exp": datetime.utcnow() + timedelta(days=30)}
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-        if hasattr(token, "decode"):
-            token = token.decode("utf-8")
-        return {"user": {"id": user_id, "email": email, "first_name": first_name}, "token": token}
+        jwt_token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        if hasattr(jwt_token, "decode"):
+            jwt_token = jwt_token.decode("utf-8")
+        return {
+            "user": {"id": user_id, "email": email, "first_name": first_name, "verified": False},
+            "token": jwt_token,
+        }
     finally:
         db.close()
 
@@ -166,8 +208,14 @@ async def auth_signin(body: dict = Body(...)):
         token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
         if hasattr(token, "decode"):
             token = token.decode("utf-8")
+        verified = u.get("verified", True)
         return {
-            "user": {"id": u["id"], "email": u["email"], "first_name": u["first_name"]},
+            "user": {
+                "id": u["id"],
+                "email": u["email"],
+                "first_name": u["first_name"],
+                "verified": verified,
+            },
             "token": token,
         }
     finally:
@@ -185,7 +233,26 @@ async def auth_me(authorization: str = Header(None)):
         u = db.get_user_by_id(user_id)
         if not u:
             raise HTTPException(status_code=404, detail="User not found")
-        return {"id": u["id"], "email": u["email"], "first_name": u["first_name"]}
+        return {
+            "id": u["id"],
+            "email": u["email"],
+            "first_name": u["first_name"],
+            "verified": u.get("verified", True),
+        }
+    finally:
+        db.close()
+
+
+@app.get("/verify")
+async def verify_email(token: str = Query(..., description="Verification token from email")):
+    """Verify email from link. Redirects to homepage with ?verified=true on success."""
+    db = get_db()
+    try:
+        u = db.get_user_by_verification_token(token)
+        if not u:
+            return RedirectResponse(url=f"/?verified=invalid")
+        db.verify_user(u["id"])
+        return RedirectResponse(url=f"/?verified=true")
     finally:
         db.close()
 
@@ -788,6 +855,16 @@ async def create_checkout_session(authorization: str = Header(None)):
     user_id = _verify_auth_token(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
+    db = get_db()
+    try:
+        u = db.get_user_by_id(user_id)
+        if u and not u.get("verified", True):
+            raise HTTPException(
+                status_code=400,
+                detail="Please verify your email before upgrading to Premium",
+            )
+    finally:
+        db.close()
     stripe_secret = os.getenv("STRIPE_SECRET_KEY")
     stripe_price_id = os.getenv("STRIPE_PRICE_ID")
     if not stripe_secret or not stripe_price_id:

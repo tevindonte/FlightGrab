@@ -151,6 +151,21 @@ class FlightDatabase:
             );
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
+        for col_name, col_def in [
+            ("verified", "BOOLEAN DEFAULT FALSE"),
+            ("verification_token", "VARCHAR(255)"),
+            ("verification_sent_at", "TIMESTAMP"),
+        ]:
+            try:
+                cursor.execute(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name='users' AND column_name=%s",
+                    (col_name,),
+                )
+                if not cursor.fetchone():
+                    cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_def}")
+            except Exception:
+                pass
 
         self.conn.commit()
         cursor.close()
@@ -1046,13 +1061,28 @@ class FlightDatabase:
             'google_booking_url': row[12] if len(row) > 12 else None,
         }
 
-    def create_user(self, user_id: str, email: str, password_hash: str, first_name: str = "") -> bool:
+    def create_user(
+        self,
+        user_id: str,
+        email: str,
+        password_hash: str,
+        first_name: str = "",
+        verification_token: str = None,
+    ) -> bool:
         """Create user. Returns False if email already exists."""
         cursor = self.conn.cursor()
         try:
             cursor.execute(
-                "INSERT INTO users (id, email, password_hash, first_name) VALUES (%s, %s, %s, %s)",
-                (user_id, email.lower().strip(), password_hash, (first_name or "").strip()[:100]),
+                """INSERT INTO users (id, email, password_hash, first_name, verification_token, verification_sent_at)
+                   VALUES (%s, %s, %s, %s, %s, CASE WHEN %s IS NOT NULL THEN NOW() ELSE NULL END)""",
+                (
+                    user_id,
+                    email.lower().strip(),
+                    password_hash,
+                    (first_name or "").strip()[:100],
+                    verification_token,
+                    verification_token,
+                ),
             )
             self.conn.commit()
             return True
@@ -1063,30 +1093,75 @@ class FlightDatabase:
             cursor.close()
 
     def get_user_by_email(self, email: str):
-        """Get user by email. Returns dict with id, email, password_hash, first_name or None."""
+        """Get user by email. Returns dict with id, email, password_hash, first_name, verified or None."""
         cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT id, email, password_hash, first_name FROM users WHERE LOWER(email) = LOWER(%s)",
-            (email.strip(),),
-        )
-        row = cursor.fetchone()
-        cursor.close()
+        try:
+            cursor.execute(
+                "SELECT id, email, password_hash, first_name, COALESCE(verified, TRUE) FROM users WHERE LOWER(email) = LOWER(%s)",
+                (email.strip(),),
+            )
+            row = cursor.fetchone()
+        finally:
+            cursor.close()
         if not row:
             return None
-        return {"id": row[0], "email": row[1], "password_hash": row[2], "first_name": row[3] or ""}
+        return {
+            "id": row[0],
+            "email": row[1],
+            "password_hash": row[2],
+            "first_name": row[3] or "",
+            "verified": bool(row[4]) if len(row) > 4 else True,
+        }
 
     def get_user_by_id(self, user_id: str):
-        """Get user by id. Returns dict with id, email, first_name or None."""
+        """Get user by id. Returns dict with id, email, first_name, verified or None."""
         cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT id, email, first_name FROM users WHERE id = %s",
-            (user_id,),
-        )
-        row = cursor.fetchone()
-        cursor.close()
+        try:
+            cursor.execute(
+                "SELECT id, email, first_name, COALESCE(verified, TRUE) FROM users WHERE id = %s",
+                (user_id,),
+            )
+            row = cursor.fetchone()
+        finally:
+            cursor.close()
         if not row:
             return None
-        return {"id": row[0], "email": row[1], "first_name": row[2] or ""}
+        return {
+            "id": row[0],
+            "email": row[1],
+            "first_name": row[2] or "",
+            "verified": bool(row[3]) if len(row) > 3 else True,
+        }
+
+    def get_user_by_verification_token(self, token: str):
+        """Find user by verification token if not expired (24h). Returns dict or None."""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                """SELECT id, email FROM users
+                   WHERE verification_token = %s
+                   AND verification_sent_at > NOW() - INTERVAL '24 hours'""",
+                (token,),
+            )
+            row = cursor.fetchone()
+        finally:
+            cursor.close()
+        if not row:
+            return None
+        return {"id": row[0], "email": row[1]}
+
+    def verify_user(self, user_id: str) -> bool:
+        """Mark user as verified. Returns True if updated."""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE users SET verified = TRUE, verification_token = NULL WHERE id = %s",
+                (user_id,),
+            )
+            self.conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            cursor.close()
 
     def get_subscription_status(self, user_id: str):
         """Return is_premium, alert_count, alert_limit. Free users limited to 5 alerts."""

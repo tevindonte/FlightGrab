@@ -14,6 +14,7 @@
     var signInSection = document.getElementById('sign-in-section');
     var userName = document.getElementById('user-name');
     var userAvatar = document.getElementById('user-avatar');
+    var unverifiedBanner = document.getElementById('unverified-banner');
     if (currentUser) {
       if (userName) userName.textContent = currentUser.firstName || 'Account';
       if (userAvatar) {
@@ -22,9 +23,11 @@
       }
       if (userMenu) { userMenu.style.display = 'flex'; userMenu.classList.add('header-auth-visible'); }
       if (signInSection) { signInSection.style.display = 'none'; signInSection.classList.remove('header-auth-visible'); }
+      if (unverifiedBanner) unverifiedBanner.classList.toggle('hidden', currentUser.verified !== false);
     } else {
       if (signInSection) { signInSection.style.display = 'flex'; signInSection.classList.add('header-auth-visible'); }
       if (userMenu) { userMenu.style.display = 'none'; userMenu.classList.remove('header-auth-visible'); }
+      if (unverifiedBanner) unverifiedBanner.classList.add('hidden');
     }
   }
 
@@ -44,7 +47,8 @@
           id: u.id,
           email: u.email || '',
           firstName: u.first_name || 'Account',
-          avatar: ''
+          avatar: '',
+          verified: u.verified !== false
         };
         fetch((typeof API !== 'undefined' ? API : '') + '/api/date-preferences', { headers: { 'Authorization': 'Bearer ' + token } })
           .then(function (r) { return r.json(); })
@@ -75,7 +79,7 @@
     window.authModalMode = mode;
     if (mode === 'signup') {
       title.textContent = 'Sign Up';
-      subtitle.textContent = 'Create an account to save flights and set price alerts.';
+      subtitle.textContent = 'Create an account to save flights and set price alerts. We\'ll send a verification link to your email.';
       if (signupFields) signupFields.classList.remove('hidden');
       if (submitBtn) submitBtn.textContent = 'Sign Up';
       if (toggleEl) toggleEl.innerHTML = 'Already have an account? <a href="#" id="auth-toggle-link">Sign in</a>';
@@ -2076,7 +2080,8 @@
           id: data.user.id,
           email: data.user.email || '',
           firstName: data.user.first_name || 'Account',
-          avatar: ''
+          avatar: '',
+          verified: data.user.verified !== false
         };
         closeAuthModal();
         syncAuthUI();
@@ -2121,10 +2126,35 @@
 
   function checkHashAndOpenModals() {
     const hash = (window.location.hash || '').toLowerCase();
+    const params = new URLSearchParams(window.location.search);
     if (hash === '#signin') { openAuthModal('signin'); history.replaceState(null, '', window.location.pathname + window.location.search); }
     else if (hash === '#signup') { openAuthModal('signup'); history.replaceState(null, '', window.location.pathname + window.location.search); }
     else if (hash === '#alerts' && currentUser) openMyAlertsModal();
     else if (hash === '#saved' && currentUser) openSavedFlightsModal();
+    if (params.get('verified') === 'true') {
+      history.replaceState(null, '', window.location.pathname);
+      showVerifyBanner('success');
+    } else if (params.get('verified') === 'invalid') {
+      history.replaceState(null, '', window.location.pathname);
+      showVerifyBanner('invalid');
+    }
+  }
+
+  function showVerifyBanner(type) {
+    var banner = document.getElementById('verify-banner');
+    if (!banner) return;
+    var msg = banner.querySelector('.verify-banner-msg');
+    var close = banner.querySelector('.verify-banner-close');
+    if (type === 'success') {
+      msg.textContent = 'Email verified! Thanks for confirming.';
+      banner.classList.remove('verify-banner-invalid');
+      banner.classList.remove('hidden');
+    } else if (type === 'invalid') {
+      msg.textContent = 'Verification link expired or invalid. Sign in and we can resend it.';
+      banner.classList.add('verify-banner-invalid');
+      banner.classList.remove('hidden');
+    }
+    if (close) close.onclick = function () { banner.classList.add('hidden'); };
   }
 
   window.addEventListener('hashchange', checkHashAndOpenModals);
@@ -2375,6 +2405,8 @@
   }
 
   async function bootstrap() {
+    // Open auth modals immediately when landing with #signin/#signup (don't wait for async)
+    checkHashAndOpenModals();
     try {
       await fetch(`${API}/api/config`);
     } catch (e) {}
