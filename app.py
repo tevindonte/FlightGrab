@@ -5,7 +5,7 @@ FlightGrab - Flight Deals Aggregator API
 import os
 import urllib.parse
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Query, Header, Body, Request
 from fastapi.responses import RedirectResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -22,23 +22,21 @@ BASE_URL = os.getenv("APP_URL", "https://flightgrab.cc").rstrip("/")
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 
 
-def _verify_clerk_token(authorization: str | None) -> str | None:
-    """Verify Clerk JWT and return user_id (sub claim) or None."""
+JWT_SECRET = os.getenv("JWT_SECRET_KEY", "change-this-in-production")
+JWT_ALGORITHM = "HS256"
+
+
+def _verify_auth_token(authorization: str | None) -> str | None:
+    """Verify JWT and return user_id or None."""
     if not authorization or not authorization.startswith("Bearer "):
         return None
     token = authorization[7:].strip()
     if not token:
         return None
-    jwks_url = os.getenv("CLERK_JWKS_URL")
-    if not jwks_url:
-        return None
     try:
         import jwt
-        from jwt import PyJWKClient
-        jwks_client = PyJWKClient(jwks_url)
-        signing_key = jwks_client.get_signing_key_from_jwt(token)
-        payload = jwt.decode(token, signing_key.key, algorithms=["RS256"])
-        return payload.get("sub")
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload.get("user_id")
     except Exception:
         return None
 
@@ -106,13 +104,90 @@ async def ping():
 
 @app.get("/api/config")
 async def get_config():
-    """Public config for frontend (Clerk key, etc.)."""
-    clerk_accounts = os.getenv("CLERK_ACCOUNTS_URL", "https://accounts.flightgrab.cc").rstrip("/")
-    return {
-        "clerkPublishableKey": os.getenv("CLERK_PUBLISHABLE_KEY", ""),
-        "clerkSignInUrl": clerk_accounts + "/sign-in",
-        "clerkSignUpUrl": clerk_accounts + "/sign-up",
-    }
+    """Public config for frontend."""
+    return {"authMode": "custom"}
+
+
+@app.post("/api/auth/signup")
+async def auth_signup(body: dict = Body(...)):
+    """Create account. Returns user + token."""
+    import bcrypt
+    import jwt
+    import uuid
+
+    email = (body.get("email") or "").strip().lower()
+    password = (body.get("password") or "").strip()
+    first_name = (body.get("first_name") or "").strip()[:100]
+
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Email and password required")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    pw_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    user_id = "user_" + str(uuid.uuid4()).replace("-", "")[:24]
+
+    db = get_db()
+    try:
+        ok = db.create_user(user_id, email, pw_hash, first_name)
+        if not ok:
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+        payload = {"user_id": user_id, "email": email, "exp": datetime.utcnow() + timedelta(days=30)}
+        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        if hasattr(token, "decode"):
+            token = token.decode("utf-8")
+        return {"user": {"id": user_id, "email": email, "first_name": first_name}, "token": token}
+    finally:
+        db.close()
+
+
+@app.post("/api/auth/signin")
+async def auth_signin(body: dict = Body(...)):
+    """Sign in. Returns user + token."""
+    import bcrypt
+    import jwt
+
+    email = (body.get("email") or "").strip().lower()
+    password = (body.get("password") or "").strip()
+
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Email and password required")
+
+    db = get_db()
+    try:
+        u = db.get_user_by_email(email)
+        if not u:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        if not bcrypt.checkpw(password.encode("utf-8"), u["password_hash"].encode("utf-8")):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+
+        payload = {"user_id": u["id"], "email": u["email"], "exp": datetime.utcnow() + timedelta(days=30)}
+        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        if hasattr(token, "decode"):
+            token = token.decode("utf-8")
+        return {
+            "user": {"id": u["id"], "email": u["email"], "first_name": u["first_name"]},
+            "token": token,
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/auth/me")
+async def auth_me(authorization: str = Header(None)):
+    """Get current user. Requires valid token."""
+    user_id = _verify_auth_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    db = get_db()
+    try:
+        u = db.get_user_by_id(user_id)
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {"id": u["id"], "email": u["email"], "first_name": u["first_name"]}
+    finally:
+        db.close()
 
 
 @app.get("/robots.txt")
@@ -631,7 +706,7 @@ async def book_redirect(
 @app.get("/api/subscription/status")
 async def get_subscription_status(authorization: str = Header(None)):
     """Get user's subscription status and alert limits."""
-    user_id = _verify_clerk_token(authorization)
+    user_id = _verify_auth_token(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
     db = get_db()
@@ -648,7 +723,7 @@ async def subscribe_alert(
     authorization: str = Header(None),
 ):
     """Subscribe to price alert. Requires Clerk auth. Free users limited to 5 alerts."""
-    user_id = _verify_clerk_token(authorization)
+    user_id = _verify_auth_token(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
     user_id_body = body.get("user_id")
@@ -680,7 +755,7 @@ async def subscribe_alert(
 @app.get("/api/alerts")
 async def get_my_alerts(authorization: str = Header(None)):
     """Get user's active alerts. Requires Clerk auth."""
-    user_id = _verify_clerk_token(authorization)
+    user_id = _verify_auth_token(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
     db = get_db()
@@ -694,7 +769,7 @@ async def get_my_alerts(authorization: str = Header(None)):
 @app.delete("/api/alerts/{alert_id:int}")
 async def delete_alert(alert_id: int, authorization: str = Header(None)):
     """Deactivate an alert. Requires Clerk auth."""
-    user_id = _verify_clerk_token(authorization)
+    user_id = _verify_auth_token(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
     db = get_db()
@@ -710,7 +785,7 @@ async def delete_alert(alert_id: int, authorization: str = Header(None)):
 @app.post("/api/subscription/checkout")
 async def create_checkout_session(authorization: str = Header(None)):
     """Create Stripe Checkout session for Premium. Redirects user to Stripe-hosted payment page."""
-    user_id = _verify_clerk_token(authorization)
+    user_id = _verify_auth_token(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
     stripe_secret = os.getenv("STRIPE_SECRET_KEY")
@@ -789,7 +864,7 @@ async def save_flight(
     authorization: str = Header(None),
 ):
     """Save a route. Requires Clerk auth."""
-    user_id = _verify_clerk_token(authorization)
+    user_id = _verify_auth_token(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
     origin = (body.get("origin") or "")[:3].upper()
@@ -808,7 +883,7 @@ async def save_flight(
 @app.get("/api/saved-flights")
 async def get_saved_flights(authorization: str = Header(None)):
     """Get user's saved flights. Requires Clerk auth."""
-    user_id = _verify_clerk_token(authorization)
+    user_id = _verify_auth_token(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
     db = get_db()
@@ -822,7 +897,7 @@ async def get_saved_flights(authorization: str = Header(None)):
 @app.get("/api/date-preferences")
 async def get_date_preferences(authorization: str = Header(None)):
     """Get user's saved date range. Requires Clerk auth."""
-    user_id = _verify_clerk_token(authorization)
+    user_id = _verify_auth_token(authorization)
     if not user_id:
         return {"date_from": None, "date_to": None}
     db = get_db()
@@ -839,7 +914,7 @@ async def save_date_preferences(
     authorization: str = Header(None),
 ):
     """Save preferred date range. Requires Clerk auth."""
-    user_id = _verify_clerk_token(authorization)
+    user_id = _verify_auth_token(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
     date_from = (body.get("date_from") or "").strip()[:10]
@@ -861,7 +936,7 @@ async def save_date_preferences(
 @app.delete("/api/saved-flights/{saved_id:int}")
 async def delete_saved_flight(saved_id: int, authorization: str = Header(None)):
     """Delete a saved flight. Requires Clerk auth."""
-    user_id = _verify_clerk_token(authorization)
+    user_id = _verify_auth_token(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
     db = get_db()

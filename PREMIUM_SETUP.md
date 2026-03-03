@@ -30,9 +30,10 @@ FlightGrab Premium ($9.99/month) gives users unlimited price alerts. Free users 
 Add to your `.env` (or Render/hosting env):
 
 ```
-STRIPE_SECRET_KEY=sk_live_xxx          # or sk_test_xxx for testing
-STRIPE_PRICE_ID=price_xxx              # The $9.99/month price ID
-STRIPE_WEBHOOK_SECRET=whsec_xxx       # From Stripe webhook setup (below)
+JWT_SECRET_KEY=your-long-random-secret   # Use openssl rand -hex 32 for production
+STRIPE_SECRET_KEY=sk_live_xxx            # or sk_test_xxx for testing
+STRIPE_PRICE_ID=price_xxx                # The $9.99/month price ID
+STRIPE_WEBHOOK_SECRET=whsec_xxx          # From Stripe webhook setup (below)
 ```
 
 ### 3. Webhook configuration
@@ -66,9 +67,11 @@ Use the CLI's printed `whsec_...` as `STRIPE_WEBHOOK_SECRET` for local dev.
    - After payment, webhook should set `user_subscriptions.status = 'active'`
    - User can now add unlimited alerts
 
-## Auth (Clerk) – Optional
+## Auth (Custom)
 
-- **CLERK_ACCOUNTS_URL** – Base URL for Clerk hosted sign-in (default: `https://accounts.flightgrab.cc`). Override if your Clerk instance uses a different domain.
+FlightGrab uses custom email/password auth (no Clerk).
+
+- **JWT_SECRET_KEY** – Secret for signing JWTs. Set a long random string in production (e.g. `openssl rand -hex 32`).
 
 ## Revenue expectation
 

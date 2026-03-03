@@ -105,28 +105,7 @@
         btn.disabled = true;
         btn.textContent = 'Loading...';
         try {
-          const configRes = await fetch('/api/config');
-          const config = await configRes.json();
-          const clerkKey = config.clerkPublishableKey || '';
-          if (!clerkKey) {
-            alert('Please sign in first. Go to the homepage and sign in, then return here to upgrade.');
-            btn.disabled = false;
-            btn.textContent = 'Upgrade to Premium — $9.99/mo';
-            return;
-          }
-          if (typeof window.Clerk === 'undefined') {
-            const script = document.createElement('script');
-            script.src = 'https://accounts.clerk.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
-            script.setAttribute('data-clerk-publishable-key', clerkKey);
-            script.async = true;
-            await new Promise(function(resolve, reject) {
-              script.onload = resolve;
-              script.onerror = reject;
-              document.head.appendChild(script);
-            });
-            await window.Clerk.load();
-          }
-          const token = await window.Clerk.session.getToken({ skipCache: true });
+          const token = localStorage.getItem('flightgrab_auth_token');
           if (!token) {
             alert('Please sign in first. Go to the homepage, sign in, then return here to upgrade.');
             btn.disabled = false;

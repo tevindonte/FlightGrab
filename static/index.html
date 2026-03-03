@@ -291,6 +291,32 @@
     </div>
   </div>
 
+  <div id="auth-modal" class="modal hidden" role="dialog" aria-labelledby="auth-modal-title" aria-modal="true">
+    <div class="modal-backdrop" onclick="window.closeAuthModal && closeAuthModal()"></div>
+    <div class="modal-content modal-small">
+      <button type="button" class="modal-close" onclick="window.closeAuthModal && closeAuthModal()" aria-label="Close">&times;</button>
+      <h2 id="auth-modal-title" class="modal-title">Sign In</h2>
+      <p class="modal-subtitle" id="auth-modal-subtitle">Sign in to save flights and set price alerts.</p>
+      <form id="auth-form">
+        <div id="auth-signup-fields" class="form-group hidden">
+          <label for="auth-first-name">First name</label>
+          <input type="text" id="auth-first-name" placeholder="Optional" maxlength="100">
+        </div>
+        <div class="form-group">
+          <label for="auth-email">Email</label>
+          <input type="email" id="auth-email" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="auth-password">Password</label>
+          <input type="password" id="auth-password" placeholder="At least 6 characters" required minlength="6">
+        </div>
+        <p id="auth-error" class="auth-error hidden"></p>
+        <button type="submit" class="btn-primary btn-full" id="auth-submit">Sign In</button>
+      </form>
+      <p id="auth-toggle" class="auth-toggle">Don't have an account? <a href="#" id="auth-toggle-link">Sign up</a></p>
+    </div>
+  </div>
+
   <div id="calendar-modal" class="modal hidden" role="dialog" aria-labelledby="calendar-modal-title">
     <div class="modal-backdrop" onclick="window.closeCalendarModal && closeCalendarModal()"></div>
     <div class="modal-content modal-calendar">

@@ -1820,6 +1820,22 @@ picture {
   margin-bottom: 8px;
 }
 
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="password"] {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
 .input-with-prefix {
   display: flex;
   align-items: center;
@@ -1885,6 +1901,27 @@ picture {
 }
 
 .alert-upgrade-cta a:hover {
+  text-decoration: underline;
+}
+
+.auth-error {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin: 0 0 12px;
+}
+
+.auth-toggle {
+  margin-top: 16px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.auth-toggle a {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.auth-toggle a:hover {
   text-decoration: underline;
 }
 

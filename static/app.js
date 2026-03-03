@@ -2,94 +2,104 @@
   const API = '';
 
   let currentUser = null;
-  let Clerk = null;
-  let clerkSignInUrl = '';
-  let clerkSignUpUrl = '';
-
-  async function loadClerkAndRun(publishableKey, config) {
-    if (!publishableKey) {
-      runApp();
-      return;
-    }
-    return new Promise(function (resolve) {
-      const script = document.createElement('script');
-      script.src = 'https://accounts.clerk.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
-      script.async = true;
-      script.setAttribute('data-clerk-publishable-key', publishableKey);
-      script.onload = function () {
-        Clerk = window.Clerk;
-        if (config) {
-          clerkSignInUrl = config.clerkSignInUrl || 'https://accounts.flightgrab.cc/sign-in';
-          clerkSignUpUrl = config.clerkSignUpUrl || 'https://accounts.flightgrab.cc/sign-up';
-        }
-        runApp();
-        resolve();
-      };
-      script.onerror = function () { runApp(); resolve(); };
-      document.head.appendChild(script);
-    });
-  }
+  const AUTH_TOKEN_KEY = 'flightgrab_auth_token';
 
   async function getAuthToken() {
-    if (!Clerk || !Clerk.session) return null;
-    try {
-      const token = await Clerk.session.getToken({ skipCache: true });
-      return token || null;
-    } catch (e) {
-      return null;
-    }
+    var token = localStorage.getItem(AUTH_TOKEN_KEY);
+    return token || null;
   }
 
   function syncAuthUI() {
-    if (!Clerk) return;
     var userMenu = document.getElementById('user-menu');
     var signInSection = document.getElementById('sign-in-section');
     var userName = document.getElementById('user-name');
     var userAvatar = document.getElementById('user-avatar');
-    if (Clerk.user) {
-      currentUser = {
-        id: Clerk.user.id,
-        email: Clerk.user.primaryEmailAddress?.emailAddress || '',
-        firstName: Clerk.user.firstName || 'Account',
-        avatar: Clerk.user.imageUrl || ''
-      };
-      if (userName) userName.textContent = currentUser.firstName;
+    if (currentUser) {
+      if (userName) userName.textContent = currentUser.firstName || 'Account';
       if (userAvatar) {
-        userAvatar.src = currentUser.avatar || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23666"/><rect width="24" height="24" fill="%23ddd"/></svg>';
-        userAvatar.alt = currentUser.firstName;
+        userAvatar.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23666"/><rect width="24" height="24" fill="%23ddd"/></svg>';
+        userAvatar.alt = currentUser.firstName || 'Account';
       }
       if (userMenu) { userMenu.style.display = 'flex'; userMenu.classList.add('header-auth-visible'); }
       if (signInSection) signInSection.style.display = 'none';
-      Clerk.session.getToken().then(function (token) {
-        fetch((typeof API !== 'undefined' ? API : '') + '/api/date-preferences', { headers: { 'Authorization': 'Bearer ' + token } })
-          .then(function (r) { return r.json(); })
-          .then(function (data) {
-            if (data && data.date_from && data.date_to) window.preferredDates = data;
-          })
-          .catch(function () {});
-      }).catch(function () {});
     } else {
-      currentUser = null;
       if (signInSection) { signInSection.style.display = 'flex'; signInSection.classList.add('header-auth-visible'); }
       if (userMenu) userMenu.style.display = 'none';
     }
   }
 
   async function initializeAuth() {
-    if (!Clerk) return;
-    try {
-      await Clerk.load();
+    var token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) {
       syncAuthUI();
-      if (typeof Clerk.addListener === 'function') {
-        Clerk.addListener(function () {
-          syncAuthUI();
-        });
+      return;
+    }
+    try {
+      var res = await fetch((typeof API !== 'undefined' ? API : '') + '/api/auth/me', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (res.ok) {
+        var u = await res.json();
+        currentUser = {
+          id: u.id,
+          email: u.email || '',
+          firstName: u.first_name || 'Account',
+          avatar: ''
+        };
+        fetch((typeof API !== 'undefined' ? API : '') + '/api/date-preferences', { headers: { 'Authorization': 'Bearer ' + token } })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data && data.date_from && data.date_to) window.preferredDates = data;
+          })
+          .catch(function () {});
+      } else {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
       }
     } catch (e) {
-      document.getElementById('sign-in-section').style.display = 'flex';
-      document.getElementById('sign-in-section').classList.add('header-auth-visible');
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+    syncAuthUI();
+  }
+
+  function openAuthModal(mode) {
+    mode = mode || 'signin';
+    var title = document.getElementById('auth-modal-title');
+    var subtitle = document.getElementById('auth-modal-subtitle');
+    var signupFields = document.getElementById('auth-signup-fields');
+    var submitBtn = document.getElementById('auth-submit');
+    var toggleEl = document.getElementById('auth-toggle');
+    var toggleLink = document.getElementById('auth-toggle-link');
+    var errorEl = document.getElementById('auth-error');
+    var form = document.getElementById('auth-form');
+    if (!title) return;
+    window.authModalMode = mode;
+    if (mode === 'signup') {
+      title.textContent = 'Sign Up';
+      subtitle.textContent = 'Create an account to save flights and set price alerts.';
+      if (signupFields) signupFields.classList.remove('hidden');
+      if (submitBtn) submitBtn.textContent = 'Sign Up';
+      if (toggleEl) toggleEl.innerHTML = 'Already have an account? <a href="#" id="auth-toggle-link">Sign in</a>';
+    } else {
+      title.textContent = 'Sign In';
+      subtitle.textContent = 'Sign in to save flights and set price alerts.';
+      if (signupFields) signupFields.classList.add('hidden');
+      if (submitBtn) submitBtn.textContent = 'Sign In';
+      if (toggleEl) toggleEl.innerHTML = 'Don\'t have an account? <a href="#" id="auth-toggle-link">Sign up</a>';
+    }
+    if (errorEl) { errorEl.classList.add('hidden'); errorEl.textContent = ''; }
+    if (form) form.reset();
+    document.getElementById('auth-modal').classList.remove('hidden');
+    document.getElementById('auth-modal').setAttribute('aria-hidden', 'false');
+    var newLink = document.getElementById('auth-toggle-link');
+    if (newLink) {
+      newLink.addEventListener('click', function (e) { e.preventDefault(); openAuthModal(mode === 'signup' ? 'signin' : 'signup'); });
     }
   }
+
+  window.closeAuthModal = function () {
+    document.getElementById('auth-modal').classList.add('hidden');
+    document.getElementById('auth-modal').setAttribute('aria-hidden', 'true');
+  };
 
   function tryPendingAlert() {
     try {
@@ -1265,8 +1275,8 @@
     const fromVal = dateFromEl && dateFromEl.value;
     const toVal = dateToEl && dateToEl.value;
     if (!fromVal || !toVal || !currentUser) {
-      if (!currentUser && Clerk) {
-        if (confirm('Sign in to save your preferred dates. Sign in now?')) redirectToSignIn();
+      if (!currentUser) {
+        if (confirm('Sign in to save your preferred dates. Sign in now?')) openAuthModal('signin');
       } else {
         alert('Select a date range first.');
       }
@@ -1848,12 +1858,8 @@
   window.openAlertModal = async function (data) {
     if (!data || !data.origin || !data.destination) return;
     if (!currentUser) {
-      if (Clerk) {
-        try { sessionStorage.setItem('flightgrab_pending_alert', JSON.stringify(data)); } catch (e) {}
-        if (confirm('Sign in to set price alerts. Sign in now?')) redirectToSignIn();
-      } else {
-        alert('Sign in is required for price alerts. Set up Clerk to enable this feature.');
-      }
+      try { sessionStorage.setItem('flightgrab_pending_alert', JSON.stringify(data)); } catch (e) {}
+      if (confirm('Sign in to set price alerts. Sign in now?')) openAuthModal('signin');
       return;
     }
     document.getElementById('alert-route').textContent = data.origin + ' → ' + data.destination;
@@ -1900,7 +1906,7 @@
     }
     const token = await getAuthToken();
     if (!token) {
-      redirectToSignIn();
+      openAuthModal('signin');
       return;
     }
     const origin = document.getElementById('alert-origin').value;
@@ -2030,27 +2036,61 @@
     });
   });
 
-  function getReturnUrl() {
-    var base = (typeof window !== 'undefined' && window.location) ? (window.location.origin + window.location.pathname) : '/';
-    return base + (window.location.search || '');
-  }
-
-  function redirectToSignIn() {
-    var url = clerkSignInUrl || 'https://accounts.flightgrab.cc/sign-in';
-    window.location.href = url + '?redirect_url=' + encodeURIComponent(getReturnUrl());
-  }
-
-  function redirectToSignUp() {
-    var url = clerkSignUpUrl || 'https://accounts.flightgrab.cc/sign-up';
-    window.location.href = url + '?redirect_url=' + encodeURIComponent(getReturnUrl());
-  }
-
   document.getElementById('btn-sign-in')?.addEventListener('click', function () {
-    redirectToSignIn();
+    openAuthModal('signin');
   });
   document.getElementById('btn-sign-up')?.addEventListener('click', function () {
-    redirectToSignUp();
+    openAuthModal('signup');
   });
+
+  document.getElementById('auth-form')?.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var email = (document.getElementById('auth-email')?.value || '').trim().toLowerCase();
+    var password = (document.getElementById('auth-password')?.value || '').trim();
+    var firstName = (document.getElementById('auth-first-name')?.value || '').trim();
+    var errorEl = document.getElementById('auth-error');
+    var submitBtn = document.getElementById('auth-submit');
+    if (!email || !password) {
+      if (errorEl) { errorEl.textContent = 'Email and password required'; errorEl.classList.remove('hidden'); }
+      return;
+    }
+    if (password.length < 6) {
+      if (errorEl) { errorEl.textContent = 'Password must be at least 6 characters'; errorEl.classList.remove('hidden'); }
+      return;
+    }
+    if (errorEl) errorEl.classList.add('hidden');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Please wait...'; }
+    try {
+      var endpoint = window.authModalMode === 'signup' ? '/api/auth/signup' : '/api/auth/signin';
+      var body = { email: email, password: password };
+      if (window.authModalMode === 'signup') body.first_name = firstName;
+      var res = await fetch((typeof API !== 'undefined' ? API : '') + endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (res.ok) {
+        localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+        currentUser = {
+          id: data.user.id,
+          email: data.user.email || '',
+          firstName: data.user.first_name || 'Account',
+          avatar: ''
+        };
+        closeAuthModal();
+        syncAuthUI();
+      } else {
+        if (errorEl) { errorEl.textContent = data.detail || 'Something went wrong'; errorEl.classList.remove('hidden'); }
+      }
+    } catch (err) {
+      if (errorEl) { errorEl.textContent = 'Network error. Please try again.'; errorEl.classList.remove('hidden'); }
+    }
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = window.authModalMode === 'signup' ? 'Sign Up' : 'Sign In'; }
+  });
+
+  document.getElementById('auth-modal')?.querySelector('.modal-backdrop')?.addEventListener('click', closeAuthModal);
+  document.getElementById('auth-modal')?.querySelector('.modal-close')?.addEventListener('click', closeAuthModal);
 
   const userMenuTrigger = document.getElementById('user-menu-trigger');
   const userDropdown = document.getElementById('user-dropdown');
@@ -2065,16 +2105,18 @@
   }
   document.getElementById('link-sign-out')?.addEventListener('click', function (e) {
     e.preventDefault();
-    if (Clerk) Clerk.signOut();
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    currentUser = null;
+    syncAuthUI();
   });
   document.getElementById('link-my-alerts')?.addEventListener('click', function (e) {
     e.preventDefault();
-    if (currentUser) openMyAlertsModal(); else redirectToSignIn();
+    if (currentUser) openMyAlertsModal(); else openAuthModal('signin');
   });
 
   document.getElementById('link-saved-flights')?.addEventListener('click', function (e) {
     e.preventDefault();
-    if (currentUser) openSavedFlightsModal(); else redirectToSignIn();
+    if (currentUser) openSavedFlightsModal(); else openAuthModal('signin');
   });
 
   function checkHashAndOpenModals() {
@@ -2166,7 +2208,7 @@
     try {
       const token = await getAuthToken();
       if (!token) {
-        redirectToSignIn();
+        openAuthModal('signin');
         return;
       }
       const res = await fetch(`${API}/api/alerts/${id}`, {
@@ -2260,7 +2302,7 @@
     try {
       const token = await getAuthToken();
       if (!token) {
-        redirectToSignIn();
+        openAuthModal('signin');
         return;
       }
       const res = await fetch(`${API}/api/saved-flights/${id}`, {
@@ -2284,14 +2326,14 @@
   async function saveFlightFromCard(origin, destination, btnEl) {
     if (!currentUser) {
       try { sessionStorage.setItem('flightgrab_pending_save', JSON.stringify({ origin, destination })); } catch (e) {}
-      redirectToSignIn();
+      openAuthModal('signin');
       return;
     }
     try {
       const token = await getAuthToken();
       if (!token) {
         try { sessionStorage.setItem('flightgrab_pending_save', JSON.stringify({ origin, destination })); } catch (e) {}
-        redirectToSignIn();
+        openAuthModal('signin');
         return;
       }
       const res = await fetch(`${API}/api/saved-flights`, {
@@ -2311,7 +2353,7 @@
         }
         openSavedFlightsModal();
       } else if (res.status === 401) {
-        redirectToSignIn();
+        openAuthModal('signin');
       } else {
         alert(data.error || data.detail || 'Failed to save.');
       }
@@ -2332,16 +2374,9 @@
 
   async function bootstrap() {
     try {
-      const res = await fetch(`${API}/api/config`);
-      const config = await res.json();
-      clerkSignInUrl = config.clerkSignInUrl || 'https://accounts.flightgrab.cc/sign-in';
-      clerkSignUpUrl = config.clerkSignUpUrl || 'https://accounts.flightgrab.cc/sign-up';
-      await loadClerkAndRun(config.clerkPublishableKey || '', config);
-    } catch (e) {
-      clerkSignInUrl = 'https://accounts.flightgrab.cc/sign-in';
-      clerkSignUpUrl = 'https://accounts.flightgrab.cc/sign-up';
-      runApp();
-    }
+      await fetch(`${API}/api/config`);
+    } catch (e) {}
+    runApp();
   }
 
   if (document.readyState === 'loading') {

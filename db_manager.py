@@ -141,6 +141,17 @@ class FlightDatabase:
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON user_subscriptions(user_id);")
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id VARCHAR(255) PRIMARY KEY,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                first_name VARCHAR(255) DEFAULT '',
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
+
         self.conn.commit()
         cursor.close()
         print("Tables created")
@@ -1034,6 +1045,48 @@ class FlightDatabase:
             'booking_url': row[11],
             'google_booking_url': row[12] if len(row) > 12 else None,
         }
+
+    def create_user(self, user_id: str, email: str, password_hash: str, first_name: str = "") -> bool:
+        """Create user. Returns False if email already exists."""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO users (id, email, password_hash, first_name) VALUES (%s, %s, %s, %s)",
+                (user_id, email.lower().strip(), password_hash, (first_name or "").strip()[:100]),
+            )
+            self.conn.commit()
+            return True
+        except psycopg2.IntegrityError:
+            self.conn.rollback()
+            return False
+        finally:
+            cursor.close()
+
+    def get_user_by_email(self, email: str):
+        """Get user by email. Returns dict with id, email, password_hash, first_name or None."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT id, email, password_hash, first_name FROM users WHERE LOWER(email) = LOWER(%s)",
+            (email.strip(),),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        if not row:
+            return None
+        return {"id": row[0], "email": row[1], "password_hash": row[2], "first_name": row[3] or ""}
+
+    def get_user_by_id(self, user_id: str):
+        """Get user by id. Returns dict with id, email, first_name or None."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT id, email, first_name FROM users WHERE id = %s",
+            (user_id,),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        if not row:
+            return None
+        return {"id": row[0], "email": row[1], "first_name": row[2] or ""}
 
     def get_subscription_status(self, user_id: str):
         """Return is_premium, alert_count, alert_limit. Free users limited to 5 alerts."""
