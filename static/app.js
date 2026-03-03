@@ -21,10 +21,10 @@
         userAvatar.alt = currentUser.firstName || 'Account';
       }
       if (userMenu) { userMenu.style.display = 'flex'; userMenu.classList.add('header-auth-visible'); }
-      if (signInSection) signInSection.style.display = 'none';
+      if (signInSection) { signInSection.style.display = 'none'; signInSection.classList.remove('header-auth-visible'); }
     } else {
       if (signInSection) { signInSection.style.display = 'flex'; signInSection.classList.add('header-auth-visible'); }
-      if (userMenu) userMenu.style.display = 'none';
+      if (userMenu) { userMenu.style.display = 'none'; userMenu.classList.remove('header-auth-visible'); }
     }
   }
 
@@ -2121,8 +2121,10 @@
 
   function checkHashAndOpenModals() {
     const hash = (window.location.hash || '').toLowerCase();
-    if (hash === '#alerts' && currentUser) openMyAlertsModal();
-    if (hash === '#saved' && currentUser) openSavedFlightsModal();
+    if (hash === '#signin') { openAuthModal('signin'); history.replaceState(null, '', window.location.pathname + window.location.search); }
+    else if (hash === '#signup') { openAuthModal('signup'); history.replaceState(null, '', window.location.pathname + window.location.search); }
+    else if (hash === '#alerts' && currentUser) openMyAlertsModal();
+    else if (hash === '#saved' && currentUser) openSavedFlightsModal();
   }
 
   window.addEventListener('hashchange', checkHashAndOpenModals);
