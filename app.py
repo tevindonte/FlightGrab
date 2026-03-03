@@ -266,6 +266,16 @@ async def robots():
     )
 
 
+@app.get("/ads.txt")
+async def ads_txt():
+    """AdSense ads.txt (required for AdSense monetization)."""
+    from fastapi.responses import PlainTextResponse
+    # Format: ad-system-domain, publisher-id, relationship, certification-authority-id
+    return PlainTextResponse(
+        "google.com, pub-2790122390767697, DIRECT, f08c47fec0942fa0\n"
+    )
+
+
 @app.get("/")
 async def root():
     """Serve the FlightGrab homepage."""
