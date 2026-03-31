@@ -1059,12 +1059,28 @@ async def delete_saved_flight(saved_id: int, authorization: str = Header(None)):
 
 
 @app.get("/api/health")
-async def health():
-    """Health check; verifies DB connectivity."""
+async def health(strict: bool = Query(False, description="If true, return 503 when DB is unreachable")):
+    """
+    Reports database connectivity. By default returns HTTP 200 so load balancers / Render deploy
+    probes that hit this URL do not fail the whole deploy on a transient DB error.
+
+    Prefer configuring your host to probe GET /ping (no DB). Use ?strict=true for a probe that
+    must fail (503) when Postgres is down.
+    """
     try:
         db = FlightDatabase()
         db.connect()
         db.close()
         return {"status": "ok", "database": "connected"}
     except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        detail = str(e)
+        if strict:
+            raise HTTPException(status_code=503, detail=detail)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "degraded",
+                "database": "disconnected",
+                "detail": detail,
+            },
+        )

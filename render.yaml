@@ -1,5 +1,8 @@
 # FlightGrab – Render Blueprint
 # Web app only. Scraping runs via GitHub Actions (scrape-flights, scrape-full-locations).
+#
+# If the Dashboard "Health Check Path" was set to /api/health, deploys can fail (503 when DB is slow).
+# This file uses /ping. Sync the Dashboard to /ping, or rely on /api/health default (200 + JSON).
 
 services:
   - type: web
