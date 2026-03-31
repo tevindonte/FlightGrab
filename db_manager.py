@@ -441,24 +441,32 @@ class FlightDatabase:
         cursor.close()
         return [r[0] for r in rows]
 
-    def get_route_flights(self, origin: str, destination: str, limit: int = 100):
+    def get_route_flights(self, origin: str, destination: str, limit: int = 100, departure_date=None):
         """
         Get flights for a specific route (origin -> destination).
         Returns list of flight dicts with price, date, airline, etc.
+        If departure_date is set (YYYY-MM-DD), only rows for that date are returned.
         """
         cursor = self.conn.cursor()
+        date_filter = ""
+        params = [origin.upper(), destination.upper()]
+        if departure_date:
+            date_filter = " AND departure_date = %s::date"
+            params.append(departure_date)
+        params.append(limit)
         cursor.execute(
-            """
+            f"""
             SELECT origin, destination, departure_date, price, num_stops, airline,
                    duration, departure_time, COALESCE(booking_url, google_booking_url, google_flights_url),
                    google_booking_url
             FROM current_prices
             WHERE origin = %s AND destination = %s
             AND departure_date >= CURRENT_DATE AND price > 0
+            {date_filter}
             ORDER BY price ASC, departure_date ASC
             LIMIT %s
             """,
-            (origin.upper(), destination.upper(), limit),
+            tuple(params),
         )
         rows = cursor.fetchall()
         cursor.close()

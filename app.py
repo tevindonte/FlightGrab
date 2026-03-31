@@ -6,6 +6,7 @@ import os
 import urllib.parse
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
+from typing import Optional
 from fastapi import FastAPI, HTTPException, Query, Header, Body, Request
 from fastapi.responses import RedirectResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -672,6 +673,27 @@ async def search_route(
         if result is None:
             raise HTTPException(status_code=404, detail="No data for this route")
         return result
+    finally:
+        db.close()
+
+
+@app.get("/api/route-flights")
+async def api_route_flights(
+    origin: str = Query(..., min_length=3, max_length=3),
+    destination: str = Query(..., min_length=3, max_length=3),
+    departure_date: Optional[str] = Query(None, description="Optional filter YYYY-MM-DD"),
+    limit: int = Query(100, ge=1, le=200),
+):
+    """
+    Public JSON list of stored flights for a route (for FlightGrab Python package and integrations).
+    """
+    origin, destination = origin.upper(), destination.upper()
+    db = get_db()
+    try:
+        flights = db.get_route_flights(
+            origin, destination, limit=limit, departure_date=departure_date or None
+        )
+        return {"origin": origin, "destination": destination, "flights": flights}
     finally:
         db.close()
 
