@@ -2,6 +2,7 @@
 FlightGrab - Flight Deals Aggregator API
 """
 
+import hmac
 import os
 import urllib.parse
 from contextlib import asynccontextmanager
@@ -705,6 +706,72 @@ async def api_route_flights(
             db.close()
 
 
+def _booking_referer_trusted(referer: Optional[str]) -> bool:
+    """Allow same-site browser navigations when booking auth is enforced."""
+    if not referer:
+        return False
+    raw = os.getenv(
+        "FLIGHTGRAB_BOOKING_TRUSTED_REFERERS",
+        "flightgrab.cc,www.flightgrab.cc",
+    )
+    parts = [p.strip().lower() for p in raw.split(",") if p.strip()]
+    ref = referer.lower()
+    return any(p in ref for p in parts)
+
+
+def _verify_booking_access(
+    authorization: Optional[str],
+    x_api_key: Optional[str],
+    referer: Optional[str],
+) -> None:
+    """
+    When FLIGHTGRAB_ENFORCE_BOOKING_AUTH is set, require one of:
+    - X-API-Key matching FLIGHTGRAB_BOOKING_API_KEYS (comma-separated), or
+    - Authorization: Bearer <JWT> for a user with active premium subscription, or
+    - Referer from FLIGHTGRAB_BOOKING_TRUSTED_REFERERS (default: flightgrab.cc) for browser clicks from the site.
+
+    When unset, the endpoint stays public (backward compatible).
+    """
+    enforce = os.getenv("FLIGHTGRAB_ENFORCE_BOOKING_AUTH", "").strip().lower() in ("1", "true", "yes")
+    if not enforce:
+        return
+
+    keys_env = os.getenv("FLIGHTGRAB_BOOKING_API_KEYS", "")
+    keys = [k.strip() for k in keys_env.split(",") if k.strip()]
+    if x_api_key and keys:
+        for k in keys:
+            if len(x_api_key) != len(k):
+                continue
+            try:
+                if hmac.compare_digest(x_api_key.encode("utf-8"), k.encode("utf-8")):
+                    return
+            except Exception:
+                continue
+
+    if authorization and authorization.startswith("Bearer "):
+        user_id = _verify_auth_token(authorization)
+        if user_id:
+            db = get_db()
+            try:
+                st = db.get_subscription_status(user_id)
+                if st.get("is_premium"):
+                    return
+            finally:
+                db.close()
+
+    if _booking_referer_trusted(referer):
+        return
+
+    raise HTTPException(
+        status_code=401,
+        detail=(
+            "Booking link resolution requires X-API-Key (see FLIGHTGRAB_BOOKING_API_KEYS), "
+            "a premium Bearer token, or a trusted Referer from this site. "
+            "Disable enforcement with FLIGHTGRAB_ENFORCE_BOOKING_AUTH=0."
+        ),
+    )
+
+
 def _booking_ttl_seconds(source: str) -> int:
     """Heuristic TTLs: airline deeplinks expire quickly; Google Flights search is safe longer."""
     if source in ("airline_direct_cached", "airline_extracted", "airline_fresh_playwright"):
@@ -736,10 +803,13 @@ def _booking_json_payload(
 
 @app.get("/api/book-redirect")
 async def book_redirect(
+    request: Request,
     origin: str = Query(..., min_length=3, max_length=3),
     destination: str = Query(..., min_length=3, max_length=3),
     date: str = Query(..., description="Departure date YYYY-MM-DD"),
     format: str = Query(None, description="If 'json', return URL in JSON instead of redirect"),
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
     Generate fresh OTA booking link by simulating Continue click on Google Flights.
@@ -747,7 +817,12 @@ async def book_redirect(
     Falls back to Google Flights booking page if generation fails.
 
     JSON format adds fallback_url, source, ttl_seconds, refreshed_at for clients that need refresh logic.
+
+    Optional auth when FLIGHTGRAB_ENFORCE_BOOKING_AUTH=1: X-API-Key, premium Bearer JWT, or trusted Referer.
     """
+    referer = request.headers.get("referer") or request.headers.get("Referer")
+    _verify_booking_access(authorization, x_api_key, referer)
+
     origin = origin.upper()
     destination = destination.upper()
 
