@@ -5,9 +5,10 @@ FlightGrab - Flight Deals Aggregator API
 import os
 import urllib.parse
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Query, Header, Body, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import RedirectResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -687,8 +688,6 @@ async def api_route_flights(
     """
     Public JSON list of stored flights for a route (for FlightGrab Python package and integrations).
     """
-    from fastapi.encoders import jsonable_encoder
-
     origin, destination = origin.upper(), destination.upper()
     db = None
     try:
@@ -706,6 +705,35 @@ async def api_route_flights(
             db.close()
 
 
+def _booking_ttl_seconds(source: str) -> int:
+    """Heuristic TTLs: airline deeplinks expire quickly; Google Flights search is safe longer."""
+    if source in ("airline_direct_cached", "airline_extracted", "airline_fresh_playwright"):
+        return 600  # 10 min — session-style airline URLs
+    if source == "google_booking_session":
+        return 1800  # 30 min — Google booking handoff
+    return 86400  # search / generic fallback
+
+
+def _booking_json_payload(
+    final_url: str,
+    fallback_url: str,
+    source: str,
+) -> dict:
+    refreshed = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    ttl = _booking_ttl_seconds(source)
+    return {
+        "url": final_url,
+        "fallback_url": fallback_url,
+        "source": source,
+        "ttl_seconds": ttl,
+        "refreshed_at": refreshed,
+        "hint": (
+            "Airline URLs are often short-lived. After ttl_seconds, call this endpoint again for a "
+            "fresh url, or open fallback_url (Google Flights search for this route/date)."
+        ),
+    }
+
+
 @app.get("/api/book-redirect")
 async def book_redirect(
     origin: str = Query(..., min_length=3, max_length=3),
@@ -717,9 +745,16 @@ async def book_redirect(
     Generate fresh OTA booking link by simulating Continue click on Google Flights.
     User clicks card -> this endpoint -> Playwright clicks -> redirect to airline.
     Falls back to Google Flights booking page if generation fails.
+
+    JSON format adds fallback_url, source, ttl_seconds, refreshed_at for clients that need refresh logic.
     """
     origin = origin.upper()
     destination = destination.upper()
+
+    fallback_search_url = (
+        "https://www.google.com/travel/flights?q="
+        + urllib.parse.quote(f"One way flights from {origin} to {destination} on {date}")
+    )
 
     db = get_db()
     try:
@@ -742,15 +777,14 @@ async def book_redirect(
         db.close()
 
     final_url = None
+    link_source = "google_flights_search"
 
     # Pre-extracted airline URL (from batch refresh): instant redirect, no Cloud Run needed
     if booking_url and "google.com" not in (booking_url or "").lower():
         final_url = booking_url
+        link_source = "airline_direct_cached"
     else:
-        fallback = (
-            "https://www.google.com/travel/flights?q="
-            + urllib.parse.quote(f"One way flights from {origin} to {destination} on {date}")
-        )
+        fallback = fallback_search_url
 
         # For extract-from-search, use tfs (protobuf) URL - it works; simple ?q= often fails "Did not reach booking page"
         search_url = fallback
@@ -783,6 +817,7 @@ async def book_redirect(
                         data = resp.json()
                         if data.get("success") and data.get("url"):
                             final_url = data["url"]
+                            link_source = "airline_extracted"
             except Exception:
                 pass
 
@@ -794,6 +829,7 @@ async def book_redirect(
                 fresh_link = await generator.get_fresh_booking_link(google_booking_url, timeout_ms=25000)
                 if fresh_link:
                     final_url = fresh_link
+                    link_source = "airline_fresh_playwright"
             except ImportError:
                 pass
             except Exception:
@@ -801,12 +837,14 @@ async def book_redirect(
 
             if not final_url:
                 final_url = google_booking_url
+                link_source = "google_booking_session"
 
         if not final_url:
             final_url = fallback
+            link_source = "google_flights_search"
 
     if format == "json":
-        return JSONResponse(content={"url": final_url})
+        return JSONResponse(content=jsonable_encoder(_booking_json_payload(final_url, fallback_search_url, link_source)))
     return RedirectResponse(url=final_url)
 
 
