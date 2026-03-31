@@ -85,11 +85,11 @@ if os.path.isdir(static_dir):
 
 def get_db():
     db = FlightDatabase()
-    db.connect()
     try:
-        return db
+        db.connect()
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
+    return db
 
 
 @app.get("/ping")
@@ -687,15 +687,23 @@ async def api_route_flights(
     """
     Public JSON list of stored flights for a route (for FlightGrab Python package and integrations).
     """
+    from fastapi.encoders import jsonable_encoder
+
     origin, destination = origin.upper(), destination.upper()
-    db = get_db()
+    db = None
     try:
+        db = get_db()
         flights = db.get_route_flights(
             origin, destination, limit=limit, departure_date=departure_date or None
         )
-        return {"origin": origin, "destination": destination, "flights": flights}
+        return jsonable_encoder({"origin": origin, "destination": destination, "flights": flights})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"route-flights: {str(e)}")
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 
 @app.get("/api/book-redirect")

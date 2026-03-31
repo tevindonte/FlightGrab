@@ -451,7 +451,7 @@ class FlightDatabase:
         date_filter = ""
         params = [origin.upper(), destination.upper()]
         if departure_date:
-            date_filter = " AND departure_date = %s::date"
+            date_filter = " AND departure_date = %s"
             params.append(departure_date)
         params.append(limit)
         cursor.execute(
@@ -479,12 +479,19 @@ class FlightDatabase:
             except (TypeError, ValueError):
                 return 0
 
+        def _date_iso(d):
+            if d is None:
+                return None
+            if hasattr(d, "isoformat"):
+                return d.isoformat()
+            return str(d)
+
         return [
             {
                 "origin": r[0],
                 "destination": r[1],
-                "date": r[2].isoformat() if r[2] else None,
-                "price": float(r[3]),
+                "date": _date_iso(r[2]),
+                "price": float(r[3]) if r[3] is not None else 0.0,
                 "stops": _num_stops(r[4]),
                 "airline": r[5] or "",
                 "duration": r[6] or "",
