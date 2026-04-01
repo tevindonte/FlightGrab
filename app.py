@@ -19,7 +19,26 @@ from dotenv import load_dotenv
 from db_manager import FlightDatabase
 from airport_names import get_city_name, parse_route_slug, route_slug
 
+import aiven_api_keys
+
+
+def _strip_placeholder_db_urls() -> None:
+    """Remove shell env placeholders so .env / .env.local can supply real URIs."""
+    for key in ("AIVEN_DATABASE_URL", "DATABASE_URL"):
+        v = os.environ.get(key)
+        if not v:
+            continue
+        try:
+            host = urllib.parse.urlparse(v).hostname
+            if host in ("...", "YOUR_HOST"):
+                del os.environ[key]
+        except Exception:
+            pass
+
+
+_strip_placeholder_db_urls()
 load_dotenv()
+load_dotenv(".env.local", override=True)
 
 BASE_URL = os.getenv("APP_URL", "https://flightgrab.cc").rstrip("/")
 ZEPTOMAIL_API_KEY = os.getenv("ZEPTOMAIL_API_KEY") or os.getenv("ZOHO_SMTP_PASSWORD")
@@ -63,6 +82,10 @@ async def lifespan(app: FastAPI):
         import time
         _sitemap_cache["xml"] = _build_sitemap_xml()
         _sitemap_cache["expires"] = time.time() + 3600
+    except Exception:
+        pass
+    try:
+        aiven_api_keys.create_api_keys_table()
     except Exception:
         pass
     yield
@@ -706,6 +729,21 @@ async def api_route_flights(
             db.close()
 
 
+def _is_premium_user(user_id: str) -> bool:
+    """Premium via Aiven (if configured) or primary Neon DATABASE_URL (either may hold Stripe state)."""
+    if aiven_api_keys.get_aiven_dsn():
+        try:
+            if aiven_api_keys.is_aiven_premium(user_id):
+                return True
+        except Exception:
+            pass
+    db = get_db()
+    try:
+        return bool(db.get_subscription_status(user_id).get("is_premium"))
+    finally:
+        db.close()
+
+
 def _booking_referer_trusted(referer: Optional[str]) -> bool:
     """Allow same-site browser navigations when booking auth is enforced."""
     if not referer:
@@ -748,16 +786,17 @@ def _verify_booking_access(
             except Exception:
                 continue
 
+    if x_api_key and aiven_api_keys.get_aiven_dsn():
+        try:
+            if aiven_api_keys.verify_api_key(x_api_key):
+                return
+        except Exception:
+            pass
+
     if authorization and authorization.startswith("Bearer "):
         user_id = _verify_auth_token(authorization)
-        if user_id:
-            db = get_db()
-            try:
-                st = db.get_subscription_status(user_id)
-                if st.get("is_premium"):
-                    return
-            finally:
-                db.close()
+        if user_id and _is_premium_user(user_id):
+            return
 
     if _booking_referer_trusted(referer):
         return
@@ -765,8 +804,8 @@ def _verify_booking_access(
     raise HTTPException(
         status_code=401,
         detail=(
-            "Booking link resolution requires X-API-Key (see FLIGHTGRAB_BOOKING_API_KEYS), "
-            "a premium Bearer token, or a trusted Referer from this site. "
+            "Booking link resolution requires X-API-Key (env list, Aiven api_keys, or "
+            "a premium Bearer token), or a trusted Referer from this site. "
             "Disable enforcement with FLIGHTGRAB_ENFORCE_BOOKING_AUTH=0."
         ),
     )
@@ -935,6 +974,57 @@ async def get_subscription_status(authorization: str = Header(None)):
         return status
     finally:
         db.close()
+
+
+@app.post("/api/keys/create")
+async def api_keys_create(authorization: str = Header(None)):
+    """
+    Create a Pro API key for the Python package (shown once). Requires premium subscription.
+    Requires ``AIVEN_DATABASE_URL`` and the ``api_keys`` table (created on startup).
+    """
+    user_id = _verify_auth_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    if not _is_premium_user(user_id):
+        raise HTTPException(status_code=403, detail="Premium subscription required.")
+    if not aiven_api_keys.get_aiven_dsn():
+        raise HTTPException(
+            status_code=503,
+            detail="API key storage not configured (set AIVEN_DATABASE_URL on the server).",
+        )
+    out = aiven_api_keys.create_key_for_user(user_id)
+    if not out:
+        raise HTTPException(status_code=500, detail="Could not create API key.")
+    return out
+
+
+@app.get("/api/keys/list")
+async def api_keys_list(authorization: str = Header(None)):
+    """List API key prefixes and metadata (never the full secret)."""
+    user_id = _verify_auth_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    if not aiven_api_keys.get_aiven_dsn():
+        return {"keys": []}
+    return {"keys": aiven_api_keys.list_keys_for_user(user_id)}
+
+
+@app.post("/api/keys/revoke")
+async def api_keys_revoke(body: dict = Body(...), authorization: str = Header(None)):
+    """Revoke an API key by id (from list)."""
+    user_id = _verify_auth_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    raw = body.get("key_id")
+    try:
+        key_id = int(raw)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="key_id must be an integer")
+    if not aiven_api_keys.get_aiven_dsn():
+        raise HTTPException(status_code=503, detail="API key storage not configured.")
+    if not aiven_api_keys.revoke_key(user_id, key_id):
+        raise HTTPException(status_code=404, detail="Key not found or already revoked.")
+    return {"status": "revoked"}
 
 
 @app.post("/api/alerts/subscribe")
